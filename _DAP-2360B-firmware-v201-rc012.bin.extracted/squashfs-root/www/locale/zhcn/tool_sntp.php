@@ -1,0 +1,67 @@
+<?
+$m_context_title = "时间和日期设置";
+$m_time_config_title = "时间配置";
+$m_auto_time_config_title = "自动时间配置";
+$m_set_date_time_title = "手动设置日期和时间";
+$m_time				= "当前时间";
+$m_time_zone			= "时区";
+$m_enable_daylight_saving	= "启用夏令时";
+
+$m_title_ntp	= "自动时间配置";
+$m_enable_ntp		= "启用NTP服务器";
+$m_interval		= "间隔";
+$m_ntp_server		= "NTP服务器";
+$m_select_ntp_server	= "选择NTP服务器";
+
+$m_current_time	= "日期和时间";
+$m_year		= "年";
+$m_month	= "月";
+$m_day		= "日";
+$m_days		= "日";
+$m_hour		= "时";
+$m_minute	= "分";
+$m_second	= "秒";
+$m_copy_pc_time	= "复制计算机时间设置";
+$m_daylight_saving_offset	="夏令时偏移量";
+$m_daylight_saving_date	="夏令时";
+$m_week ="周";
+$m_day_of_week = "星期";
+$m_dst_start = "DST起始";
+$m_dst_end = "DST结束";
+$m_jan = "一月";
+$m_feb = "二月";
+$m_mar = "三月";
+$m_apr = "四月";
+$m_may = "五月";
+$m_jun = "六月";
+$m_jul = "七月";
+$m_aug = "八月";
+$m_sep = "九月";
+$m_oct = "十月";
+$m_nov = "十一月";
+$m_dec = "十二月";
+$m_1st = "第一";
+$m_2nd = "第二";
+$m_3rd = "第三";
+$m_4th = "第四";
+$m_5th = "第五";
+$m_sun = "星期日";
+$m_mon = "星期一";
+$m_tue = "星期二";
+$m_wed = "星期三";
+$m_thu = "星期四";
+$m_fri = "星期五";
+$m_sat = "星期六";
+$m_am = " 上午";
+$m_pm = " 下午";
+
+$a_invalid_ip		= "无效的IP地址 !";
+$a_invalid_ntp_server	= "无效NTP服务器 !";
+$a_invalid_day_light_saving_dates = "DST开始时间和结束时间不能相同!";
+$a_invalid_year		= "无效年份，请重新设置。";
+$a_invalid_mon		= "无效月份，请重新设置。";
+$a_invalid_day		= "无效天数，请重新设置。";
+$a_invalid_hour		= "无效小时，请重新设置。";
+$a_invalid_min		= "无效分钟，请重新设置。";
+$a_invalid_sec		= "无效秒，请重新设置。";
+?>

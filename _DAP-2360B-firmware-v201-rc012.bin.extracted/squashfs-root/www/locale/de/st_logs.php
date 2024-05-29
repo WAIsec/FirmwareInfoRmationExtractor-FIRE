@@ -1,0 +1,39 @@
+<?
+$m_context_title	= "Protokolleinstellungen";
+$m_log_setting_title = "Protokolleinstellungen";
+$m_log_ip	=  "Protokollserver/IP-Adresse ";
+$m_log_type = "Protokolltyp";
+$m_system_activity	=  "Systemaktivität";
+$m_wireless_activity	=  "Funkaktivität";
+$m_notice	=  "Beobachtung";
+$m_smtp_setting_title = "E-Mail-Benachrichtigung";
+$m_smtp = "E-Mail-Benachrichtigung";
+$m_enable = "Aktivieren";
+$m_smtp_ip = "E-Mail-Serveradresse";
+$m_smtp_from_email = "Von (E-Mail-Adresse)";
+$m_smtp_to_email = "An (E-Mail-Adresse)";
+$m_email_log_schedule_title = "E-Mail-Protokollzeitplan";
+$m_log_schedule = "Zeitplan";
+$m_log_schedule_msg = "Stunden oder wenn Protokoll voll ist";
+$m_smtp_name = "Benutzername";
+$m_smtp_password ="Kennwort";
+$m_smtp_confirm_password ="Kennwort bestätigen";
+$m_smtp_port = "SMTP-Port";
+$m_email_type ="Outgoing mail server (SMTP)";
+$m_internal = "Internal";
+$m_gmail = "Gmail";
+$m_homail = "Hotmail";
+$m_authentication = "Authentication";
+$m_ssltls = "SSL/TLS";
+
+$a_invalid_log_ip		= "Ungültige/r Protokollserver/IP-Adresse!";
+$a_long_email_name = "The length of username in Email Address must be 1~64!";
+$a_invalid_log_ip		= "Invalid Log Server / IP Address !";
+$a_invalid_smtp_ip		= "Ungültige/r Mailserver/IP-Adresse!";
+$a_empty_user_name	="Geben Sie bitte den Benutzernamen ein.";
+$a_invalid_user_name	="Der Benutzername enthält ungültige Zeichen. Bitte überprüfen Sie ihn.";
+$a_first_blank_user_name	= "Das erste Zeichen des Benutzernamens darf kein Leerzeichen sein.";
+$a_invalid_new_password	="Das Kennwort enthält ungültige Zeichen. Bitte prüfen Sie es.";
+$a_password_not_matched	="Das Kennwort und das bestätigte Kennwort stimmen nicht überein.";
+$a_invalid_smtp_port = "Ungültiger SMTP-Port!";
+?>

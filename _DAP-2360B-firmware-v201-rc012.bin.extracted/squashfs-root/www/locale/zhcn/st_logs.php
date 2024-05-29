@@ -1,0 +1,39 @@
+<?
+$m_context_title	= "日志设置";
+$m_log_setting_title = "日志设置";
+$m_log_ip	=  "日志服务器/IP地址";
+$m_log_type = "日志类型";
+$m_system_activity	=  "系统活动";
+$m_wireless_activity	=  "无线活动";
+$m_notice	=  "注意";
+$m_smtp_setting_title = "Email通知";
+$m_smtp = "Email通知";
+$m_enable = "启用";
+$m_smtp_ip = "Email服务器地址";
+$m_smtp_from_email = "来自Email地址";
+$m_smtp_to_email = "到Email地址";
+$m_email_log_schedule_title = "Email日志计划";
+$m_log_schedule = "计划";
+$m_log_schedule_msg = "时间或当日志已满";
+$m_smtp_name = "用户名";
+$m_smtp_password ="密码";
+$m_smtp_confirm_password ="确认密码";
+$m_smtp_port = "SMTP端口";
+$m_email_type ="外部邮件服务器(SMTP)";
+$m_internal = "Internal";
+$m_gmail = "Gmail";
+$m_homail = "Hotmail";
+$m_authentication = "认证";
+$m_ssltls = "SSL/TLS";
+
+$a_invalid_email = "无效邮件地址!";
+$a_long_email_name = "邮件地址中用户名长度必须为1~64！";
+$a_invalid_log_ip		= "无效日志服务器/IP地址！";
+$a_invalid_smtp_ip		= "无效Mail服务器/IP地址！";
+$a_empty_user_name	="请输入用户名";
+$a_invalid_user_name	="用户名带有无效字符，请核对。";
+$a_first_blank_user_name	= "用户名第一个字符不能为空。";
+$a_invalid_new_password	="密码带有无效字符，请核对。";
+$a_password_not_matched	="密码和确认密码不一致";
+$a_invalid_smtp_port = "无效SMTP端口！";
+?>
