@@ -1,1 +1,0 @@
-<NewBeaconType>Basic</NewBeaconType>

@@ -73,7 +73,7 @@ def main():
         return
 
     # Get all firmware files in the directory
-    firmware_files = [os.path.join(args.directory, f) for f in os.listdir(args.directory) if os.path.isfile(os.path.join(args.directory, f))]
+    firmware_files = list_and_extract_files(args.directory)
 
     # temp results for storing execution time
     results = []

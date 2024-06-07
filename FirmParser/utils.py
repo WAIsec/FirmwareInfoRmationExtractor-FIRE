@@ -4,6 +4,8 @@ import os
 import time
 import magic
 import csv
+import zipfile
+import tarfile
 
 def calculate_entropy(data):
     if not data:
@@ -124,3 +126,40 @@ def results_exe_time_to_csv(results):
         writer.writerow(['firmware_file', 'execution_time'])
         writer.writerows(results)
     print(f"Execution times saved to {results_output}")
+
+def list_and_extract_files(directory):
+    # 모든 파일을 담을 리스트
+    file_list = []
+    
+    # 주어진 디렉토리를 순회
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            # 파일의 전체 경로
+            file_path = os.path.join(root, file)
+            
+            # 파일이 zip 파일인 경우
+            if file.endswith('.zip'):
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    extract_path = os.path.join(root, file[:-4])  # zip 파일명을 제외한 경로
+                    zip_ref.extractall(extract_path)
+                    # 압축을 푼 파일들만 리스트에 추가
+                    for extracted_root, extracted_dirs, extracted_files in os.walk(extract_path):
+                        for extracted_file in extracted_files:
+                            extracted_file_path = os.path.join(extracted_root, extracted_file)
+                            file_list.append(extracted_file_path)
+            
+            # 파일이 tar 파일인 경우 (tar, tar.gz, tar.bz2 등)
+            elif file.endswith('.tar') or file.endswith('.tar.gz') or file.endswith('.tgz') or file.endswith('.tar.bz2'):
+                with tarfile.open(file_path, 'r:*') as tar_ref:
+                    extract_path = os.path.join(root, file[:file.index('.tar')])  # tar 파일명을 제외한 경로
+                    tar_ref.extractall(extract_path)
+                    # 압축을 푼 파일들만 리스트에 추가
+                    for extracted_root, extracted_dirs, extracted_files in os.walk(extract_path):
+                        for extracted_file in extracted_files:
+                            extracted_file_path = os.path.join(extracted_root, extracted_file)
+                            file_list.append(extracted_file_path)
+            else:
+                # 압축되지 않은 파일일 경우 해당 파일의 경로를 리스트에 추가
+                file_list.append(file_path)
+    
+    return file_list
