@@ -6,18 +6,23 @@ from FirmParser.level1_tools import *
 from FirmParser.level2_tools import *
 from FirmParser.bdg_maker import *
 
-def main_parser(firmware_path):
+def main_parser(firmware_path, results_time):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
+    firm_name = os.path.basename(firmware_path)
+    # check start time
+    start_time = time.time()
+
     if is_encrypted(firmware_path):
         print(f"This file {firmware_path} was encrypted!")
     else:
-        firm_name = os.path.basename(firmware_path)
         # Make dir to store results
         output_dir = os.path.join(os.getcwd(), firm_name)
         os.makedirs(output_dir, exist_ok=True)
 
+        # if the file is compressed
+        firmware_path = decompress_files(firmware_path)
         # Extract filesystem from firmware file
         try:
             fs_path = extract_filesystem(firmware_path)
@@ -55,6 +60,12 @@ def main_parser(firmware_path):
             # Store lv2_results
             lv2_results_output = os.path.join(output_dir, "lv2_results.csv")
             save_to_csv(bin_infos, lv2_results_output)
+            # check end_time
+            end_time = end_time()
+            # calculate total time
+            exe_time = end_time - start_time
+            # store time results
+            results_time.append([firm_name, exe_time])
 
 def main():
     """
@@ -73,21 +84,15 @@ def main():
         return
 
     # Get all firmware files in the directory
-    firmware_files = list_and_extract_files(args.directory)
+    firmware_files = [os.path.join(args.directory, f) for f in os.listdir(args.directory) if os.path.isfile(os.path.join(args.directory, f))]
 
-    # temp results for storing execution time
-    results = []
-
+    # store time
+    results_time = []
     for firmware_file in firmware_files:
-        start_time = time.time()
-        main_parser(firmware_file)
-        end_time = end_time()
+        main_parser(firmware_file, results_time)
 
-        exe_time = end_time - start_time
-        results.append([firmware_file, exe_time])
-    
     # store execution time
-    results_exe_time_to_csv(results)
+    results_exe_time_to_csv(results_time)
 
 if __name__ == '__main__':
     main()
