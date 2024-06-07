@@ -94,6 +94,7 @@ def main():
         return
     # decompress all file
     decompress_files(args.directory)
+    
     # Get all firmware files in the directory
     firmware_files = []
     for root, dirs, files in os.walk(args.directory):
