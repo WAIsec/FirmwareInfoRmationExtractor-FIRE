@@ -2,9 +2,10 @@ import math
 import subprocess
 import os
 import time
+import magic
+import csv
 
 def calculate_entropy(data):
-    """ 엔트로피 계산 함수 """
     if not data:
         return 0
     
@@ -24,7 +25,6 @@ def calculate_entropy(data):
     return entropy
 
 def is_encrypted(file_path, threshold=8.5):
-    """ 엔트로피 기반 파일 암호화 여부 판단 """
     with open(file_path, 'rb') as file:
         data = file.read()
         entropy = calculate_entropy(data)
@@ -58,6 +58,69 @@ def extract_filesystem(firm_img):
     
     return None
 
+def extract_bins(fs_path):
+    bins = []
+    mime = magic.Magic(mime=True)
+    for root, dirs, files in os.walk(fs_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            # check executable
+            mime_type = mime.from_file(file_path)
+            if mime_type is not None and mime_type.startswith('application/x-executable'):
+                bins.append(file_path)
+    return bins
+
 def print_filename(file_list):
+    print("----------------------------")
     for file in file_list:
         print(os.path.basename(file))
+    print("----------------------------")
+
+
+def run_env_resolve(target_binary_path, destination_dir):
+    """
+    Runs the env_resolve command and returns the path of the resulting JSON file.
+
+    Parameters:
+    target_binary_path (str): The path to the target binary.
+    destination_dir (str): The directory where the result JSON file will be stored.
+
+    Returns:
+    str: The path to the resulting JSON file.
+    """
+    try:
+        # Construct the command
+        command = f'env_resolve {target_binary_path} --results {destination_dir}'
+
+        # Execute the command
+        subprocess.run(command, shell=True, check=True)
+        
+        # Assuming the result JSON file is saved in the destination directory
+        # and has a known pattern or name
+        result_json_path = os.path.join(destination_dir, 'env.json')
+        # Verify if the file exists
+        if os.path.exists(result_json_path):
+            return result_json_path
+    except Exception as e:
+        print(f"No json file: {e}")
+        return -1
+
+def save_to_csv(data, filename):
+    """Saves a list of dictionaries to a CSV file."""
+    if not isinstance(data, list):
+        data = [data]
+    if data:
+        keys = data[0].keys()
+        with open(filename, 'w', newline='') as csv_file:
+            dict_writer = csv.DictWriter(csv_file, fieldnames=keys)
+            dict_writer.writeheader()
+            dict_writer.writerows(data)
+
+def results_exe_time_to_csv(results):
+    # Save results to CSV
+    results_output = os.path.join(os.getcwd(), "execution_times.csv")
+    with open(results_output, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['firmware_file', 'execution_time'])
+        writer.writerows(results)
+    print(f"Execution times saved to {results_output}")
