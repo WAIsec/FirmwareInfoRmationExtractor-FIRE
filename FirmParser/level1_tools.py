@@ -33,7 +33,7 @@ class LevelOneAnalyzer:
         for dirpath, _, filenames in os.walk(self.fs_path):
             for filename in filenames:
                 if any(filename.lower().endswith(ext) for ext in WEB_EXTENSION):
-                    self.web_files.append(os.path.join(dirpath, filename))
+                    self.web_files.append(filename)
 
     def find_os_binary(self):
         """
@@ -55,7 +55,7 @@ class LevelOneAnalyzer:
                         if os.path.isfile(file_path):
                             mime_type = mime.from_file(file_path)
                             if mime_type in ['application/x-executable', 'application/x-sharedlib']:
-                                self.os_bins.append(file_path)
+                                self.os_bins.append(os.path.basename(file_path))
 
     def find_vendor_files(self):
         """
@@ -77,7 +77,7 @@ class LevelOneAnalyzer:
                         if os.path.isfile(file_path):
                             mime_type = mime.from_file(file_path)
                             if mime_type in ['application/x-executable', 'application/x-sharedlib']:
-                                self.ven_bins.append(file_path)
+                                self.ven_bins.append(os.path.basename(file_path))
             else:
                 continue
 
@@ -95,16 +95,16 @@ class LevelOneAnalyzer:
                     file_path = os.path.join(dirpath, filename)
                     if os.path.isfile(file_path):
                         if filename.endswith('.conf'):
-                            self.conf_files.append(os.path.join(dirpath, filename))
+                            self.conf_files.append(filename)
 
     def get_web_files(self):
-        return self.web_files
+        return list(set(self.web_files))
 
     def get_os_bins(self):
-        return self.os_bins
+        return list(set(self.os_bins))
 
     def get_vendor_bins(self):
-        return self.ven_bins
+        return list(set(self.ven_bins))
     
     def get_configuration_files(self):
-        return self.conf_files
+        return list(set(self.conf_files))

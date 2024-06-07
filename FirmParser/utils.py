@@ -6,6 +6,9 @@ import magic
 import csv
 import zipfile
 import tarfile
+import shutil
+
+BASE_DIR = './Parsing_Results'
 
 def calculate_entropy(data):
     if not data:
@@ -43,20 +46,47 @@ def extract_filesystem(firm_img):
     <return>
     [extraction_dir]: extracted output from firmware file 
     """
-    extraction_dir = "_" + firm_img+ ".extracted"
-    
+    extraction_dir = "Extracted_Firmware/" + "_" + os.path.basename(firm_img) + ".extracted/"
+
     if not os.path.isdir(extraction_dir):
-        result = subprocess.run(['binwalk', '-e', firm_img], capture_output=True, text=True)
+        result = subprocess.run(['binwalk', '-e', '-C', extraction_dir, firm_img], capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Binwalk extraction failed: {result.stderr}")
 
     directories = os.listdir(extraction_dir)
-
-    for dir in directories:
-        dir_path = os.path.join(extraction_dir, dir)
+    for dir_name in directories:
+        dir_path = os.path.join(extraction_dir, dir_name)
         if os.path.isdir(dir_path):
-            if os.listdir(dir_path):
-                return dir_path
+            # Check if directory is empty
+            if not any(os.listdir(dir_path)):
+                print(f"No content found in {dir_path}, removing...")
+                shutil.rmtree(dir_path)
+                continue
+            
+            # Check if directory contains only one level of content
+            subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
+            if not subdirs:
+                print(f"No subdirectories found in {dir_path}, removing...")
+                shutil.rmtree(dir_path)
+                continue
+                
+            # Check if any directory contains content
+            content_found = False
+            for subdir in subdirs:
+                if os.listdir(os.path.join(dir_path, subdir)):
+                    content_found = True
+                    break
+            if not content_found:
+                print(f"No content found in subdirectories of {dir_path}, removing...")
+                shutil.rmtree(dir_path)
+                continue
+                
+            print(f"Valid filesystem found: {dir_path}")
+            return dir_path
+        
+    # If no filesystem-like directories are found, remove the extraction directory
+    print("There is no normal filesystem!")
+    shutil.rmtree(extraction_dir)
     
     return None
 

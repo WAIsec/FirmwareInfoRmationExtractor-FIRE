@@ -1,5 +1,6 @@
 import argparse
 import time
+import os
 
 from FirmParser.utils import *
 from FirmParser.level1_tools import *
@@ -10,7 +11,7 @@ def main_parser(firmware_path, results_time):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
-    firm_name = os.path.basename(firmware_path)
+    firm_name = os.path.join(BASE_DIR, os.path.basename(firmware_path))
     # check start time
     start_time = time.time()
 
@@ -26,8 +27,12 @@ def main_parser(firmware_path, results_time):
         # Extract filesystem from firmware file
         try:
             fs_path = extract_filesystem(firmware_path)
+            if fs_path is None:
+                os.rmdir(output_dir)
+                return
         except Exception as e:
             print(f"Error to extract filesystem for {firmware_path}: {e}")
+            os.rmdir(output_dir)
             return
         
         lv1_results = dict()
@@ -61,7 +66,7 @@ def main_parser(firmware_path, results_time):
             lv2_results_output = os.path.join(output_dir, "lv2_results.csv")
             save_to_csv(bin_infos, lv2_results_output)
             # check end_time
-            end_time = end_time()
+            end_time = time.time()
             # calculate total time
             exe_time = end_time - start_time
             # store time results
@@ -83,11 +88,30 @@ def main():
         print(f"The path {args.directory} is not a valid directory.")
         return
 
-    # Get all firmware files in the directory
-    firmware_files = [os.path.join(args.directory, f) for f in os.listdir(args.directory) if os.path.isfile(os.path.join(args.directory, f))]
+    if not os.path.isdir(args.directory):
+        print(f"The path {args.directory} is not a valid directory.")
+        return
 
+    # 디렉토리 내의 모든 파일과 디렉토리를 출력
+    print(f"Contents of the directory {args.directory}:")
+    for item in os.listdir(args.directory):
+        print(item)
+
+    # Get all firmware files in the directory
+    firmware_files = []
+    for root, dirs, files in os.walk(args.directory):
+        for file in files:
+            firmware_files.append(os.path.join(root, file))
+
+    print(f"Firmware files: {firmware_files}")
+
+    if not firmware_files:
+        print("No firmware files found in the directory.")
+        return
+    
     # store time
     results_time = []
+
     for firmware_file in firmware_files:
         main_parser(firmware_file, results_time)
 
