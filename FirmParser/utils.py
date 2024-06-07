@@ -7,6 +7,8 @@ import csv
 import zipfile
 import tarfile
 import shutil
+import glob
+import re
 
 BASE_DIR = './Parsing_Results'
 
@@ -46,13 +48,14 @@ def extract_filesystem(firm_img):
     <return>
     [extraction_dir]: extracted output from firmware file 
     """
-    extraction_dir = "Extracted_Firmware/" + "_" + os.path.basename(firm_img) + ".extracted/"
+    extraction_dir = "Extracted_Firmware/"
 
-    if not os.path.isdir(extraction_dir):
+    if not os.path.isdir(extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"):
         result = subprocess.run(['binwalk', '-e', '-C', extraction_dir, firm_img], capture_output=True, text=True)
         if result.returncode != 0:
             raise RuntimeError(f"Binwalk extraction failed: {result.stderr}")
-
+    # set up
+    extraction_dir = extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"
     directories = os.listdir(extraction_dir)
     for dir_name in directories:
         dir_path = os.path.join(extraction_dir, dir_name)
@@ -122,7 +125,7 @@ def run_env_resolve(target_binary_path, destination_dir):
     """
     try:
         # Construct the command
-        command = f'env_resolve {target_binary_path} --results {destination_dir}'
+        command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
         # Execute the command
         subprocess.run(command, shell=True, check=True)
@@ -157,26 +160,5 @@ def results_exe_time_to_csv(results):
         writer.writerows(results)
     print(f"Execution times saved to {results_output}")
 
-def decompress_files(file):
-    file_path = file
-    extracted_path = None
-    
-    # 파일이 zip 파일인 경우
-    if file.endswith('.zip'):
-        with zipfile.ZipFile(file_path, 'r') as zip_ref:
-            extract_path = os.path.join(os.path.dirname(file_path), os.path.splitext(os.path.basename(file_path))[0])  # zip 파일명을 제외한 경로
-            zip_ref.extractall(extract_path)
-            extracted_path = extract_path
-    
-    # 파일이 tar 파일인 경우 (tar, tar.gz, tar.bz2 등)
-    elif file.endswith('.tar') or file.endswith('.tar.gz') or file.endswith('.tgz') or file.endswith('.tar.bz2'):
-        with tarfile.open(file_path, 'r:*') as tar_ref:
-            extract_path = os.path.join(os.path.dirname(file_path), os.path.splitext(os.path.basename(file_path))[0])  # tar 파일명을 제외한 경로
-            tar_ref.extractall(extract_path)
-            extracted_path = extract_path
-    
-    # 파일이 압축되지 않은 경우
-    else:
-        extracted_path = file_path
-    
-    return extracted_path
+def initialize_dir():
+    shutil.rmtree('Extracted_Firmware')

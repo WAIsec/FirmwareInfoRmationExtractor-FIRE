@@ -6,6 +6,8 @@ from FirmParser.utils import *
 from FirmParser.level1_tools import *
 from FirmParser.level2_tools import *
 from FirmParser.bdg_maker import *
+from FirmParser.unpacker import *
+
 
 def main_parser(firmware_path, results_time):
     """
@@ -22,8 +24,6 @@ def main_parser(firmware_path, results_time):
         output_dir = os.path.join(os.getcwd(), firm_name)
         os.makedirs(output_dir, exist_ok=True)
 
-        # if the file is compressed
-        firmware_path = decompress_files(firmware_path)
         # Extract filesystem from firmware file
         try:
             fs_path = extract_filesystem(firmware_path)
@@ -64,6 +64,11 @@ def main_parser(firmware_path, results_time):
 
             # Store lv2_results
             lv2_results_output = os.path.join(output_dir, "lv2_results.csv")
+
+            # remove full path
+            for bin in bin_infos:
+                del bin['full_path']
+
             save_to_csv(bin_infos, lv2_results_output)
             # check end_time
             end_time = time.time()
@@ -87,23 +92,13 @@ def main():
     if not os.path.isdir(args.directory):
         print(f"The path {args.directory} is not a valid directory.")
         return
-
-    if not os.path.isdir(args.directory):
-        print(f"The path {args.directory} is not a valid directory.")
-        return
-
-    # 디렉토리 내의 모든 파일과 디렉토리를 출력
-    print(f"Contents of the directory {args.directory}:")
-    for item in os.listdir(args.directory):
-        print(item)
-
+    # decompress all file
+    decompress_files(args.directory)
     # Get all firmware files in the directory
     firmware_files = []
     for root, dirs, files in os.walk(args.directory):
         for file in files:
             firmware_files.append(os.path.join(root, file))
-
-    print(f"Firmware files: {firmware_files}")
 
     if not firmware_files:
         print("No firmware files found in the directory.")
@@ -114,6 +109,7 @@ def main():
 
     for firmware_file in firmware_files:
         main_parser(firmware_file, results_time)
+        initialize_dir()
 
     # store execution time
     results_exe_time_to_csv(results_time)
