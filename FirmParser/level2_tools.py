@@ -6,6 +6,8 @@ from FirmParser.lib_parser import *
 import json
 import hashlib
 
+EXCEPTION_CASE = ['ISS.exe', 'busybox']
+
 class LevelTwoAnalyzer:
     def __init__(self, fs_path, bin_list):
         """
@@ -18,10 +20,24 @@ class LevelTwoAnalyzer:
     
     def generate_info(self):
         for bin in self.bin_list:
-            target = binNode(bin, self.lib_infos)
-            target.analyze()
-            self.bin_infos.append(target.get_bin_info())
-    
+            try:
+                if is_elf_file(bin):
+                    if any(exception in bin for exception in EXCEPTION_CASE):
+                        print(f"Skipping {bin} due to exception case.")
+                        continue
+                    target = binNode(bin, self.lib_infos)
+                    try:
+                        target.analyze()
+                        self.bin_infos.append(target.get_bin_info())    
+                    except Exception as e:
+                        print(f"Error: {e}")
+                else:
+                    print("This binary isn't ELF type.")
+                    continue
+            except Exception as e:
+                print(f"Error: {bin}=>{e}")
+                continue
+
     def set_lib_infos(self):
         parser = LibParser(self.fs_path)
         self.lib_infos = parser.get_lib_info()
@@ -31,7 +47,7 @@ class LevelTwoAnalyzer:
 
 # be used to node in level2Analyzer
 class binNode:
-    def __init__(self, bin, libs_info):
+    def __init__(self, bin, libs_info=[]):
         self.bin_path = bin
         self.bin_name = os.path.basename(bin)
         self.bin_arch = None

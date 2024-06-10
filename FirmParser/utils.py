@@ -12,6 +12,16 @@ import re
 
 BASE_DIR = './Parsing_Results'
 
+def is_elf_file(file_path):
+    """Check if a file is an ELF file by reading its magic number."""
+    try:
+        with open(file_path, 'rb') as f:
+            magic_number = f.read(4)
+            return magic_number == b'\x7fELF'
+    except Exception as e:
+        print(f"Could not read file {file_path}: {e}")
+        return False
+
 def calculate_entropy(data):
     if not data:
         return 0
@@ -99,10 +109,10 @@ def extract_bins(fs_path):
     for root, dirs, files in os.walk(fs_path):
         for file in files:
             file_path = os.path.join(root, file)
-            # check executable
-            mime_type = mime.from_file(file_path)
-            if mime_type is not None and mime_type.startswith('application/x-executable'):
-                bins.append(file_path)
+            if os.path.isfile(file_path):
+                mime_type = mime.from_file(file_path)
+                if mime_type is not None and mime_type.startswith('application/x-executable'):
+                    bins.append(file_path)
     return bins
 
 def print_filename(file_list):
@@ -121,23 +131,33 @@ def run_env_resolve(target_binary_path, destination_dir):
     destination_dir (str): The directory where the result JSON file will be stored.
 
     Returns:
-    str: The path to the resulting JSON file.
+    str: The path to the resulting JSON file, or -1 if an error occurs.
     """
     try:
+        # DEBUG
+        print(f"Now parse '{os.path.basename(target_binary_path)}'")
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
-        # Execute the command
-        subprocess.run(command, shell=True, check=True)
+        # Execute the command with a timeout
+        subprocess.run(command, shell=True, check=True, timeout=1800)
         
         # Assuming the result JSON file is saved in the destination directory
         # and has a known pattern or name
         result_json_path = os.path.join(destination_dir, 'env.json')
+        
         # Verify if the file exists
         if os.path.exists(result_json_path):
             return result_json_path
+        else:
+            print("Result JSON file does not exist.")
+            return -1
+            
+    except subprocess.TimeoutExpired:
+        print("TIME OUT: The command execution exceeded 1800 seconds.")
+        return -1
     except Exception as e:
-        print(f"No json file: {e}")
+        print(f"An error occurred: {e}")
         return -1
 
 def save_to_csv(data, filename):
