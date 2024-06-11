@@ -19,7 +19,7 @@ class LibParser:
             result = subprocess.run(['file', file_path], capture_output=True, text=True)
             return 'stripped' in result.stdout
         except Exception as e:
-            print(f"Error checking if file is stripped: {e}")
+            print(f"\033[91m[-]\033[0m Error checking if file is stripped: {e}")
             return False
 
     # extract symbols from library file
@@ -29,5 +29,5 @@ class LibParser:
             symbols = result.stdout.strip().split('\n')
             return symbols
         except subprocess.CalledProcessError as e:
-            print(f"Error extracting symbols from {lib}: {e}")
+            print(f"\033[91m[-]\033[0m Error extracting symbols from {lib}: {e}")
             return None

@@ -80,5 +80,5 @@ def decompress_files(directory):
                 else:
                     continue
             except Exception as e:
-                print(f"[-] Error: {e}")
+                print(f"\033[91m[-]\033[0m Error: {e}")
                 continue

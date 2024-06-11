@@ -9,6 +9,8 @@ import tarfile
 import shutil
 import glob
 import re
+import shutil
+
 
 BASE_DIR = './Parsing_Results'
 VENDOR_STR = ['dlink']
@@ -20,7 +22,7 @@ def is_elf_file(file_path):
             magic_number = f.read(4)
             return magic_number == b'\x7fELF'
     except Exception as e:
-        print(f"[-] Could not read file {file_path}: {e}")
+        print(f"\033[91m[-]\033[0m Could not read file {file_path}: {e}")
         return False
 
 def calculate_entropy(data):
@@ -42,6 +44,12 @@ def calculate_entropy(data):
     
     return entropy
 
+def format_time(seconds):
+    """Convert seconds to a string in the format HH:MM:SS."""
+    mins, secs = divmod(seconds, 60)
+    hours, mins = divmod(mins, 60)
+    return f"{int(hours):02}H:{int(mins):02}M:{int(secs):02}S"
+
 # extract libs from fs
 def find_libraries(fs_path):
     libs = []
@@ -50,7 +58,8 @@ def find_libraries(fs_path):
         for file in files:
             file_path = os.path.join(root, file)
             if lib_regex.match(file_path):
-                libs.append(file_path)
+                libs.append(os.path.basename(file_path))
+    return libs
 
 def extract_filesystem(firm_img):
     """
@@ -74,14 +83,14 @@ def extract_filesystem(firm_img):
         if os.path.isdir(dir_path):
             # Check if directory is empty
             if not any(os.listdir(dir_path)):
-                print(f"[-] No content found in {dir_path}, removing...")
+                print(f"\033[91m[-]\033[0m No content found in {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
             
             # Check if directory contains only one level of content
             subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
             if not subdirs:
-                print(f"[-] No subdirectories found in {dir_path}, removing...")
+                print(f"\033[91m[-]\033[0m No subdirectories found in {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
                 
@@ -92,15 +101,15 @@ def extract_filesystem(firm_img):
                     content_found = True
                     break
             if not content_found:
-                print(f"[-] No content found in subdirectories of {dir_path}, removing...")
+                print(f"\033[91m[-]\033[0m No content found in subdirectories of {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
                 
-            print(f"[+] Valid filesystem found: {dir_path}")
+            print(f"\033[92m[+]\033[0m Valid filesystem found: {dir_path}")
             return dir_path
         
     # If no filesystem-like directories are found, remove the extraction directory
-    print("[-] There is no normal filesystem!")
+    print("\033[91m[-]\033[0m There is no normal filesystem!")
     shutil.rmtree(extraction_dir)
     
     return None
@@ -117,6 +126,17 @@ def extract_bins(fs_path):
                     bins.append(file_path)
     return bins
 
+def print_blue_line():
+    # Get the terminal width
+    terminal_size = shutil.get_terminal_size((80, 20))  # Default to 80x20 if unable to get terminal size
+    width = terminal_size.columns
+
+    # Construct the line with dashes and blue color
+    blue_line = "\033[94m" + '-' * width + "\033[0m"
+
+    # Print the line
+    print(blue_line)
+
 def run_env_resolve(target_binary_path, destination_dir):
     """
     Runs the env_resolve command and returns the path of the resulting JSON file.
@@ -129,8 +149,12 @@ def run_env_resolve(target_binary_path, destination_dir):
     str: The path to the resulting JSON file, or -1 if an error occurs.
     """
     try:
+        # start line
+        print_blue_line()
+        
         # DEBUG
-        print(f"[+] Now parse '{os.path.basename(target_binary_path)}'")
+        print(f"\033[92m[+]\033[0m Now parse '{os.path.basename(target_binary_path)}'")
+        
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
@@ -140,19 +164,20 @@ def run_env_resolve(target_binary_path, destination_dir):
         # Assuming the result JSON file is saved in the destination directory
         # and has a known pattern or name
         result_json_path = os.path.join(destination_dir, 'env.json')
-        
         # Verify if the file exists
         if os.path.exists(result_json_path):
+            print_blue_line()
             return result_json_path
         else:
-            print("[-] Result JSON file does not exist.")
+            print("\033[91m[-]\033[0m Result JSON file does not exist.")
+            print_blue_line()
             return -1
             
     except subprocess.TimeoutExpired:
-        print("[-] TIME OUT: The command execution exceeded 1800 seconds.")
+        print("\033[91m[-]\033[0m TIME OUT: The command execution exceeded 1800 seconds.")
         return -1
     except Exception as e:
-        print(f"[-] An error occurred: {e}")
+        print(f"\033[91m[-]\033[0m An error occurred: {e}")
         return -1
 
 def save_to_csv(data, filename):
@@ -173,7 +198,7 @@ def results_exe_time_to_csv(results):
         writer = csv.writer(file)
         writer.writerow(['firmware_file', 'execution_time'])
         writer.writerows(results)
-    print(f"[+] Execution times saved to {results_output}")
+    print(f"\033[92m[+]\033[0m Execution times saved to {results_output}")
 
 def initialize_dir():
     shutil.rmtree('Extracted_Firmware')

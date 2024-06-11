@@ -23,20 +23,21 @@ class LevelTwoAnalyzer:
         for bin in self.bin_list:
             try:
                 if is_elf_file(bin):
-                    if any(exception in bin for exception in EXCEPTION_CASE):
-                        print(f"[-] Skipping {bin} due to exception case.")
-                        continue
                     target = binNode(bin, self.lib_infos)
                     try:
-                        target.analyze()
+                        if any(exception in bin for exception in EXCEPTION_CASE):
+                            print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)} due to exception case.")
+                            target.analyze_exception()
+                        else:
+                            target.analyze()
                         self.bin_infos.append(target.get_bin_info())    
                     except Exception as e:
-                        print(f"[-] Error: {e}")
+                        print(f"\033[91m[-]\033[0m Error: [lv2] generate_info->{e}")
                 else:
-                    print("[-] This binary isn't ELF type.")
+                    print("\033[91m[-]\033[0m This binary isn't ELF type.")
                     continue
             except Exception as e:
-                print(f"[-] Error: {bin}=>{e}")
+                print(f"\033[91m[-]\033[0m Error<{os.path.basename(bin)}>: [lv2] generate_info->{e}")
                 continue
 
     def set_lib_infos(self):
@@ -77,8 +78,8 @@ class binNode:
             'is_stripped': self.is_stripped,
             'used_libs': self.used_libs,
             'keywords': self.keywords,
-            'checksec': self.checksec,
             'used_nvram_env': self.nvram_env_used,
+            'checksec': self.checksec,
             'hash_value': self.hash_value,
             'full_path': self.bin_path
         }
@@ -93,7 +94,20 @@ class binNode:
             self.check_used_library()
             return 0
         except Exception as e:
-            print(f"[-] Error occured! {e}")
+            print(f"\033[91m[-]\033[0m Error: [lv2] analyze->{e}")
+            return 1
+        
+    def analyze_exception(self):
+        try:
+            self.basic_parsing()
+            self.calculate_file_hash()
+            self.check_sec_opt()
+            self.check_used_library()
+            self.keywords = 'Not parsed'
+            self.nvram_env_used = 'Not parsed'
+            return 0
+        except Exception as e:
+            print(f"\033[91m[-]\033[0m Error: [lv2] analyze_exception->{e}")
             return 1
 
     def basic_parsing(self):
@@ -161,7 +175,7 @@ class binNode:
             else:
                 self.checksec['RELRO'] = 0          # No RELRO
         except subprocess.CalledProcessError:
-            print(f'[-] Error: Unable to process the binary file.')
+            print(f'\033[91m[-]\033[0m Error: Unable to process the binary file.')
 
     def check_canary(self):
         try:
@@ -176,7 +190,7 @@ class binNode:
                 self.checksec['Canary'] = 0
 
         except subprocess.CalledProcessError:
-            print('[-] Error: Unable to process the binary file.')
+            print('\033[91m[-]\033[0m Error: Unable to process the binary file.')
 
     def check_nx(self):
         try:
@@ -190,7 +204,7 @@ class binNode:
             else:
                 self.checksec['NX'] = 1
         except subprocess.CalledProcessError:
-            print('[-] Error: Unable to process the binary file.')
+            print('\033[91m[-]\033[0m Error: Unable to process the binary file.')
 
     def check_pie(self):
         try:
@@ -211,12 +225,12 @@ class binNode:
                 if re.search(r'\(DEBUG\)', readelf_dynamic_output):
                     self.checksec['PIE'] = 1
                 else:
-                    print('[+] Library File')
+                    print('\033[92m[+]\033[0m Library File')
             else:
-                print('[-] Not an ELF file')
+                print('\033[91m[-]\033[0m Not an ELF file')
 
         except subprocess.CalledProcessError:
-            print('[-] Error: Unable to process the binary file.')
+            print('\033[91m[-]\033[0m Error: Unable to process the binary file.')
 
     def check_rpath_runpath(self):
         try:
@@ -235,7 +249,7 @@ class binNode:
                 self.checksec['runpath'] = 0
 
         except subprocess.CalledProcessError:
-            print('[-] Error: Unable to process the binary file.')
+            print('\033[91m[-]\033[0m Error: Unable to process the binary file.')
 
     def check_refer_env_nvram(self):
         # take json data
@@ -260,14 +274,14 @@ class binNode:
                 # remove duplicate
                 self.keywords = list(set(self.keywords))
         except Exception as e:
-            print(f"[-] Error reading JSON file: {e}")
+            print(f"\033[91m[-]\033[0m Error reading JSON file: {e}")
             self.nvram_env_used = 0
         finally:
             try:
                 if os.path.exists(jpath):
                     os.remove(jpath)
             except Exception as e:
-                print(f"[-] Error deleting JSON file: {e}")
+                print(f"\033[91m[-]\033[0m Error deleting JSON file: {e}")
     
     def check_used_library(self):
         try:
@@ -275,7 +289,7 @@ class binNode:
             if not self.is_static:
                 result = subprocess.run(['readelf', '-d', self.bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
-                    print(f"[-] Error running readelf: {result.stderr}")
+                    print(f"\033[91m[-]\033[0m Error running readelf: {result.stderr}")
                     return
                 # processing result
                 lines = result.stdout.splitlines()
@@ -300,11 +314,11 @@ class binNode:
                                 self.used_libs.append(lib)
 
                     except subprocess.CalledProcessError as e:
-                        print(f"[-] Error extracting symbols from {self.bin_name}: {e}")
+                        print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: {e}")
                         return
 
         except Exception as e:
-            print(f"[-] Error: {e}")
+            print(f"\033[91m[-]\033[0m Error: [lv2] check_used_library->{e}")
             return
         
                 

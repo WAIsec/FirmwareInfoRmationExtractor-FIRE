@@ -1,11 +1,13 @@
 import os
+import subprocess
 import magic
 from FirmParser.utils import VENDOR_STR, find_libraries
-WEB_EXTENSION = ['.html', '.htm', '.xhtml', '.xml', '.css', '.scss', '.sass', '.less', '.js', '.ts', '.jsx', 'tsx', 'php', '.asp', '.aspx', '.jsp']
+WEB_EXTENSION = ['.html', '.htm', '.xhtml', '.xml', '.css', '.scss', '.sass', '.less', '.js', '.ts', '.jsx', '.tsx', '.php', '.asp', '.aspx', '.jsp']
 
 class LevelOneAnalyzer:
-    def __init__(self, fs_path):
+    def __init__(self, fs_path, bins):
         self.fs_path = fs_path
+        self.bins = bins
         self.web_files = []
         self.os_bins = []
         self.ven_bins = []
@@ -21,7 +23,7 @@ class LevelOneAnalyzer:
             self.find_configuration_files()
             return 0
         except Exception as e:
-            print(f"[-] Error during analysis: {e}")
+            print(f"\033[91m[-]\033[0m Error during analysis: [lv1] analyze()->{e}")
             return 1
         
     def get_lv1_results(self):
@@ -31,6 +33,7 @@ class LevelOneAnalyzer:
         lv1_results['vendor_bin'] = self.ven_bins
         lv1_results['config_file'] = self.conf_files
         lv1_results['libraries'] = self.libs
+        lv1_results['Unparsed_bins'] = self.exceptional_bins
         return lv1_results
 
     def find_web_files(self):
@@ -47,26 +50,31 @@ class LevelOneAnalyzer:
                     self.web_files.append(filename)
 
     def classfy_binary(self):
-        for dirpath, _, filenames in os.walk(self.fs_path):
-            for filename in filenames:
-                file_path = os.path.join(dirpath, filename)
+        lib_exts = ['.so', '.dll', '.dylib']
+        for bin in self.bins:
+            filename = os.path.basename(bin)
 
-                # Check if any manufacturer string is in the filename (case-insensitive)
-                if any(vendor_str.lower() in filename.lower() for vendor_str in VENDOR_STR):
-                    self.ven_bins.append(file_path)
-                    continue
+            # Exclude library files
+            if any(ext in filename.lower() for ext in lib_exts):
+                continue
 
-                # Check if any manufacturer string is in the file content (case-insensitive)
-                try:
-                    with open(file_path, 'rb') as file:
-                        content = file.read().lower()  # Convert content to lower case
-                        if any(vendor_str.lower().encode() in content for vendor_str in VENDOR_STR):
-                            self.ven_bins.append(file_path)
-                        else:
-                            self.os_bins.append(file_path)
-                except Exception as e:
-                    print(f"[-] Could not read file {file_path}: {e}")
-                    self.exceptional_bins.append(file_path)
+            # Check if any manufacturer string is in the filename (case-insensitive)
+            if any(vendor_str.lower() in filename.lower() for vendor_str in VENDOR_STR):
+                self.ven_bins.append(filename)
+                continue
+
+            # Check if any manufacturer string is in the file content using grep (case-insensitive)
+            try:
+                for vendor_str in VENDOR_STR:
+                    result = subprocess.run(['grep', '-q', vendor_str, bin], capture_output=True, text=True, encoding='unicode_escape')
+                    if result.returncode == 1:  # grep returns 0 if a match is found
+                        self.ven_bins.append(filename)
+                        break
+                else:
+                    self.os_bins.append(filename)
+            except Exception as e:
+                print(f"\033[91m[-]\033[0m Error processing file {filename}: [lv1] classfy_binary->{e}")
+                self.exceptional_bins.append(filename)
 
     def find_configuration_files(self):
         """

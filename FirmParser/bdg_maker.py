@@ -13,7 +13,7 @@ class BDGinfo:
             std_bin['bdg'] = []
             connections = []
             # If bin doesn't have any env, ignore it
-            if not std_bin['used_nvram_env']:
+            if std_bin['used_nvram_env'] != 1:
                 continue
             for tar_bin in self.bin_info:
                 # except itself
