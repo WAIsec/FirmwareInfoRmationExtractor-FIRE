@@ -6,6 +6,7 @@ import tarfile
 import bz2
 import lzma
 from rarfile import RarFile
+from FirmParser.utils import print_blue_line
 
 def decompress_files(directory):
     for root, dirs, files in os.walk(directory):
@@ -81,4 +82,5 @@ def decompress_files(directory):
                     continue
             except Exception as e:
                 print(f"\033[91m[-]\033[0m Error: {e}")
+                print_blue_line()
                 continue

@@ -112,6 +112,7 @@ def main():
 
     for firmware_file in firmware_files:
         main_parser(firmware_file, results_file)
+        print_blue_line()
         initialize_dir()
 
 if __name__ == '__main__':

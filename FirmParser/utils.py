@@ -74,7 +74,7 @@ def extract_filesystem(firm_img):
     if not os.path.isdir(extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"):
         result = subprocess.run(['binwalk', '-e', '-C', extraction_dir, firm_img], capture_output=True, text=True)
         if result.returncode != 0:
-            raise RuntimeError(f"Binwalk extraction failed: {result.stderr}")
+            raise RuntimeError(f"\033[91m[-]\033[0m Binwalk extraction failed: {result.stderr}")
     # set up
     extraction_dir = extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"
     directories = os.listdir(extraction_dir)
@@ -149,12 +149,8 @@ def run_env_resolve(target_binary_path, destination_dir):
     str: The path to the resulting JSON file, or -1 if an error occurs.
     """
     try:
-        # start line
-        print_blue_line()
-        
         # DEBUG
-        print(f"\033[92m[+]\033[0m Now parse '{os.path.basename(target_binary_path)}'")
-        
+        print(f"\033[95m[*] Now parse '{os.path.basename(target_binary_path)}' with mango\033[0m")
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
@@ -166,11 +162,9 @@ def run_env_resolve(target_binary_path, destination_dir):
         result_json_path = os.path.join(destination_dir, 'env.json')
         # Verify if the file exists
         if os.path.exists(result_json_path):
-            print_blue_line()
             return result_json_path
         else:
             print("\033[91m[-]\033[0m Result JSON file does not exist.")
-            print_blue_line()
             return -1
             
     except subprocess.TimeoutExpired:
