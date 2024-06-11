@@ -11,6 +11,7 @@ import glob
 import re
 
 BASE_DIR = './Parsing_Results'
+VENDOR_STR = ['dlink']
 
 def is_elf_file(file_path):
     """Check if a file is an ELF file by reading its magic number."""
@@ -19,7 +20,7 @@ def is_elf_file(file_path):
             magic_number = f.read(4)
             return magic_number == b'\x7fELF'
     except Exception as e:
-        print(f"Could not read file {file_path}: {e}")
+        print(f"[-] Could not read file {file_path}: {e}")
         return False
 
 def calculate_entropy(data):
@@ -41,14 +42,15 @@ def calculate_entropy(data):
     
     return entropy
 
-def is_encrypted(file_path, threshold=8.5):
-    with open(file_path, 'rb') as file:
-        data = file.read()
-        entropy = calculate_entropy(data)
-        print(f"Entropy: {entropy}")
-
-        # 임계치보다 높은 경우 암호화로 판단 True 반환
-        return entropy > threshold
+# extract libs from fs
+def find_libraries(fs_path):
+    libs = []
+    lib_regex = re.compile(r'.*\.(so(\.\d+)*|a|dylib|dll)$')
+    for root, dirs, files in os.walk(fs_path):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if lib_regex.match(file_path):
+                libs.append(file_path)
 
 def extract_filesystem(firm_img):
     """
@@ -72,14 +74,14 @@ def extract_filesystem(firm_img):
         if os.path.isdir(dir_path):
             # Check if directory is empty
             if not any(os.listdir(dir_path)):
-                print(f"No content found in {dir_path}, removing...")
+                print(f"[-] No content found in {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
             
             # Check if directory contains only one level of content
             subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
             if not subdirs:
-                print(f"No subdirectories found in {dir_path}, removing...")
+                print(f"[-] No subdirectories found in {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
                 
@@ -90,15 +92,15 @@ def extract_filesystem(firm_img):
                     content_found = True
                     break
             if not content_found:
-                print(f"No content found in subdirectories of {dir_path}, removing...")
+                print(f"[-] No content found in subdirectories of {dir_path}, removing...")
                 shutil.rmtree(dir_path)
                 continue
                 
-            print(f"Valid filesystem found: {dir_path}")
+            print(f"[+] Valid filesystem found: {dir_path}")
             return dir_path
         
     # If no filesystem-like directories are found, remove the extraction directory
-    print("There is no normal filesystem!")
+    print("[-] There is no normal filesystem!")
     shutil.rmtree(extraction_dir)
     
     return None
@@ -115,13 +117,6 @@ def extract_bins(fs_path):
                     bins.append(file_path)
     return bins
 
-def print_filename(file_list):
-    print("----------------------------")
-    for file in file_list:
-        print(os.path.basename(file))
-    print("----------------------------")
-
-
 def run_env_resolve(target_binary_path, destination_dir):
     """
     Runs the env_resolve command and returns the path of the resulting JSON file.
@@ -135,7 +130,7 @@ def run_env_resolve(target_binary_path, destination_dir):
     """
     try:
         # DEBUG
-        print(f"Now parse '{os.path.basename(target_binary_path)}'")
+        print(f"[+] Now parse '{os.path.basename(target_binary_path)}'")
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
@@ -150,14 +145,14 @@ def run_env_resolve(target_binary_path, destination_dir):
         if os.path.exists(result_json_path):
             return result_json_path
         else:
-            print("Result JSON file does not exist.")
+            print("[-] Result JSON file does not exist.")
             return -1
             
     except subprocess.TimeoutExpired:
-        print("TIME OUT: The command execution exceeded 1800 seconds.")
+        print("[-] TIME OUT: The command execution exceeded 1800 seconds.")
         return -1
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"[-] An error occurred: {e}")
         return -1
 
 def save_to_csv(data, filename):
@@ -178,7 +173,7 @@ def results_exe_time_to_csv(results):
         writer = csv.writer(file)
         writer.writerow(['firmware_file', 'execution_time'])
         writer.writerows(results)
-    print(f"Execution times saved to {results_output}")
+    print(f"[+] Execution times saved to {results_output}")
 
 def initialize_dir():
     shutil.rmtree('Extracted_Firmware')

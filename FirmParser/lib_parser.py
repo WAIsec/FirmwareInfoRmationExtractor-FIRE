@@ -1,13 +1,12 @@
 import subprocess, re, os
 
 class LibParser:
-    def __init__(self, fs_path):
+    def __init__(self, libs):
         self.lib_sym_pair = dict()          # lib-symbol pair List
-        self.libs = []                      # extract library file from filesystem
-        self.fs_path = fs_path
+        self.libs = libs                      # extract library file from filesystem
 
     # return results
-    def get_lib_info(self):
+    def get_lib_symbols(self):
         self.find_libraries()
         for lib in self.libs:
             symbols = self.extract_symbols(lib)
@@ -22,16 +21,6 @@ class LibParser:
         except Exception as e:
             print(f"Error checking if file is stripped: {e}")
             return False
-
-    # extract libs from fs
-    def find_libraries(self):
-        lib_regex = re.compile(r'.*\.(so(\.\d+)*|a|dylib|dll)$')
-        for root, dirs, files in os.walk(self.fs_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                if lib_regex.match(file_path):
-                    if not self.is_stripped(file_path):
-                        self.libs.append(file_path)
 
     # extract symbols from library file
     def extract_symbols(self, lib):

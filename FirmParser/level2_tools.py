@@ -9,7 +9,7 @@ import hashlib
 EXCEPTION_CASE = ['ISS.exe', 'busybox']
 
 class LevelTwoAnalyzer:
-    def __init__(self, fs_path, bin_list):
+    def __init__(self, fs_path, bin_list, libs):
         """
         This class will be use to parse each binary
         """
@@ -17,30 +17,31 @@ class LevelTwoAnalyzer:
         self.bin_list = bin_list
         self.bin_infos = []
         self.lib_infos = dict()
+        self.libs = []
     
     def generate_info(self):
         for bin in self.bin_list:
             try:
                 if is_elf_file(bin):
                     if any(exception in bin for exception in EXCEPTION_CASE):
-                        print(f"Skipping {bin} due to exception case.")
+                        print(f"[-] Skipping {bin} due to exception case.")
                         continue
                     target = binNode(bin, self.lib_infos)
                     try:
                         target.analyze()
                         self.bin_infos.append(target.get_bin_info())    
                     except Exception as e:
-                        print(f"Error: {e}")
+                        print(f"[-] Error: {e}")
                 else:
-                    print("This binary isn't ELF type.")
+                    print("[-] This binary isn't ELF type.")
                     continue
             except Exception as e:
-                print(f"Error: {bin}=>{e}")
+                print(f"[-] Error: {bin}=>{e}")
                 continue
 
     def set_lib_infos(self):
-        parser = LibParser(self.fs_path)
-        self.lib_infos = parser.get_lib_info()
+        parser = LibParser(self.fs_path, self.libs)
+        self.lib_infos = parser.get_lib_symbols()
 
     def get_bin_infos(self):
         return self.bin_infos
@@ -92,7 +93,7 @@ class binNode:
             self.check_used_library()
             return 0
         except Exception as e:
-            print(f"Error occured! {e}")
+            print(f"[-] Error occured! {e}")
             return 1
 
     def basic_parsing(self):
@@ -160,7 +161,7 @@ class binNode:
             else:
                 self.checksec['RELRO'] = 0          # No RELRO
         except subprocess.CalledProcessError:
-            print('Error: Unable to process the binary file.')
+            print(f'[-] Error: Unable to process the binary file.')
 
     def check_canary(self):
         try:
@@ -175,7 +176,7 @@ class binNode:
                 self.checksec['Canary'] = 0
 
         except subprocess.CalledProcessError:
-            print('Error: Unable to process the binary file.')
+            print('[-] Error: Unable to process the binary file.')
 
     def check_nx(self):
         try:
@@ -189,7 +190,7 @@ class binNode:
             else:
                 self.checksec['NX'] = 1
         except subprocess.CalledProcessError:
-            print('Error: Unable to process the binary file.')
+            print('[-] Error: Unable to process the binary file.')
 
     def check_pie(self):
         try:
@@ -210,12 +211,12 @@ class binNode:
                 if re.search(r'\(DEBUG\)', readelf_dynamic_output):
                     self.checksec['PIE'] = 1
                 else:
-                    print('Library File')
+                    print('[+] Library File')
             else:
-                print('Not an ELF file')
+                print('[-] Not an ELF file')
 
         except subprocess.CalledProcessError:
-            print('Error: Unable to process the binary file.')
+            print('[-] Error: Unable to process the binary file.')
 
     def check_rpath_runpath(self):
         try:
@@ -234,7 +235,7 @@ class binNode:
                 self.checksec['runpath'] = 0
 
         except subprocess.CalledProcessError:
-            print('Error: Unable to process the binary file.')
+            print('[-] Error: Unable to process the binary file.')
 
     def check_refer_env_nvram(self):
         # take json data
@@ -259,14 +260,14 @@ class binNode:
                 # remove duplicate
                 self.keywords = list(set(self.keywords))
         except Exception as e:
-            print(f"Error reading JSON file: {e}")
+            print(f"[-] Error reading JSON file: {e}")
             self.nvram_env_used = 0
         finally:
             try:
                 if os.path.exists(jpath):
                     os.remove(jpath)
             except Exception as e:
-                print(f"Error deleting JSON file: {e}")
+                print(f"[-] Error deleting JSON file: {e}")
     
     def check_used_library(self):
         try:
@@ -274,7 +275,7 @@ class binNode:
             if not self.is_static:
                 result = subprocess.run(['readelf', '-d', self.bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
                 if result.returncode != 0:
-                    print(f"Error running readelf: {result.stderr}")
+                    print(f"[-] Error running readelf: {result.stderr}")
                     return
                 # processing result
                 lines = result.stdout.splitlines()
@@ -299,11 +300,11 @@ class binNode:
                                 self.used_libs.append(lib)
 
                     except subprocess.CalledProcessError as e:
-                        print(f"Error extracting symbols from {self.bin_name}: {e}")
+                        print(f"[-] Error extracting symbols from {self.bin_name}: {e}")
                         return
 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"[-] Error: {e}")
             return
         
                 
@@ -314,4 +315,4 @@ class binNode:
             # Read and update hash string value in blocks of 4K
             for byte_block in iter(lambda: f.read(4096), b""):
                 hash_func.update(byte_block)
-        return hash_func.hexdigest()
+        self.hash_value = hash_func.hexdigest()
