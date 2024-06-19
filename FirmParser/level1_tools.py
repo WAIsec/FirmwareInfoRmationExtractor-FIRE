@@ -28,10 +28,10 @@ class LevelOneAnalyzer:
         
     def get_lv1_results(self):
         lv1_results = dict()
-        lv1_results['web'] = self.web_files
-        lv1_results['public_bin'] = self.os_bins
-        lv1_results['vendor_bin'] = self.ven_bins
-        lv1_results['config_file'] = self.conf_files
+        lv1_results['web'] = self.get_web_files()
+        lv1_results['public_bin'] = self.get_os_bins()
+        lv1_results['vendor_bin'] = self.get_vendor_bins()
+        lv1_results['config_file'] = self.get_configuration_files()
         lv1_results['libraries'] = self.libs
         lv1_results['Unparsed_bins'] = self.exceptional_bins
         return lv1_results
@@ -48,6 +48,8 @@ class LevelOneAnalyzer:
             for filename in filenames:
                 if any(filename.lower().endswith(ext) for ext in WEB_EXTENSION):
                     self.web_files.append(filename)
+        
+        self.web_files = list(set(self.web_files))
 
     def classfy_binary(self):
         lib_exts = ['.so', '.dll', '.dylib']
@@ -67,14 +69,17 @@ class LevelOneAnalyzer:
             try:
                 for vendor_str in VENDOR_STR:
                     result = subprocess.run(['grep', '-q', vendor_str, bin], capture_output=True, text=True, encoding='unicode_escape')
-                    if result.returncode == 1:  # grep returns 0 if a match is found
+                    if result.returncode == 0:  # grep returns 0 if a match is found
                         self.ven_bins.append(filename)
                         break
-                else:
-                    self.os_bins.append(filename)
+                    else:
+                        self.os_bins.append(filename)
             except Exception as e:
                 print(f"\033[91m[-]\033[0m Error processing file {filename}: [lv1] classfy_binary->{e}")
                 self.exceptional_bins.append(filename)
+
+            self.ven_bins = list(set(self.ven_bins))
+            self.os_bins = list(set(self.os_bins))
 
     def find_configuration_files(self):
         """
@@ -91,6 +96,8 @@ class LevelOneAnalyzer:
                     if os.path.isfile(file_path):
                         if filename.endswith('.conf'):
                             self.conf_files.append(filename)
+        
+        self.conf_files = list(set(self.conf_files))
 
     def get_web_files(self):
         return list(set(self.web_files))

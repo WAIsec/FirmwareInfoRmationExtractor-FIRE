@@ -9,11 +9,13 @@ from FirmParser.bdg_maker import *
 from FirmParser.unpacker import *
 
 
-def main_parser(firmware_path, results_file):
+def main_parser(firmware_path, results_file, vendor):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
-    firm_name = os.path.join(BASE_DIR, os.path.basename(firmware_path))
+    dir = os.path.join(BASE_DIR, vendor)
+    os.makedirs(dir, exist_ok=True)
+    firm_name = os.path.join(dir, os.path.basename(firmware_path))
     # check start time
     start_time = time.time()
 
@@ -23,7 +25,7 @@ def main_parser(firmware_path, results_file):
 
     # Extract filesystem from firmware file
     try:
-        fs_path = extract_filesystem(firmware_path)
+        fs_path = extract_filesystem(firmware_path, vendor)
         if fs_path is None:
             os.rmdir(output_dir)
             return
@@ -35,7 +37,7 @@ def main_parser(firmware_path, results_file):
     lv1_results = dict()
 
     # Level1 analyzing
-    bins = extract_bins(fs_path)
+    bins = list(set(extract_bins(fs_path)))
     lv1_analyzer = LevelOneAnalyzer(fs_path, bins)
     if lv1_analyzer.analyze():
         print(f"\033[91m[-]\033[0m Something wrong happened while analyzing {firmware_path}")
@@ -86,34 +88,41 @@ def main():
     
     # arg1 is the directory containing firmware files
     parser.add_argument("directory", type=str, help="Directory containing firmware files")
-
+    parser.add_argument("vendor", type=str, help="Target Vendor name")
     args = parser.parse_args()
 
     if not os.path.isdir(args.directory):
         print(f"\033[91m[-]\033[0m The path {args.directory} is not a valid directory.")
         return
+    
     # decompress all file
+    print("\033[92m[+]\033[0m Preprocessing Target Directory...")
     decompress_files(args.directory)
     
     # Get all firmware files in the directory
     firmware_files = []
+    print(f"\033[92m[+]\033[0m Listing Firmware Files")
     for root, dirs, files in os.walk(args.directory):
         for file in files:
-            firmware_files.append(os.path.join(root, file))
+            if is_encrypted_file(file):
+                print(f"\033[91m[-]\033[0m {os.path.basename(file)} was Encrypted")
+            else:
+                firmware_files.append(os.path.join(root, file))
 
     if not firmware_files:
         print("\033[91m[-]\033[0m No firmware files found in the directory.")
         return
     
     # results time file
-    results_file = "results_time.csv"
+    results_file = f"results_time_{args.vendor}.csv"
     with open(results_file, 'w') as f:
         f.write("firmware,execution_time\n")
 
     for firmware_file in firmware_files:
-        main_parser(firmware_file, results_file)
+        print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_file)}>")
+        main_parser(firmware_file, results_file, args.vendor)
         print_blue_line()
-        initialize_dir()
+        initialize_dir(args.vendor)
 
 if __name__ == '__main__':
     main()

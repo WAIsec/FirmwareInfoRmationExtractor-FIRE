@@ -9,23 +9,29 @@ import hashlib
 EXCEPTION_CASE = ['ISS.exe', 'busybox']
 
 class LevelTwoAnalyzer:
-    def __init__(self, fs_path, bin_list, libs):
+    def __init__(self, fs_path, p_bin, v_bin, libs):
         """
         This class will be use to parse each binary
+        p_bin: public binary
+        v_bin: vendor binary
         """
         self.fs_path = fs_path
-        self.bin_list = bin_list
+        self.v_bin = v_bin
+        self.p_bin = p_bin
+        self.bin_list = v_bin + p_bin
         self.bin_infos = []
         self.lib_infos = dict()
         self.libs = []
     
+    # revision
     def generate_info(self):
+        
         for bin in self.bin_list:
             try:
                 if is_elf_file(bin):
                     target = binNode(bin, self.lib_infos)
                     try:
-                        if any(exception in bin for exception in EXCEPTION_CASE):
+                        if any(exception in bin for exception in EXCEPTION_CASE) or bin in self.p_bin:
                             print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)} due to exception case.")
                             target.analyze_exception()
                         else:
@@ -69,7 +75,7 @@ class binNode:
             'rpath': None,
             'runpath': None,
         }
-
+        
     def get_bin_info(self):
         info_dict = {
             'bin_name': self.bin_name,

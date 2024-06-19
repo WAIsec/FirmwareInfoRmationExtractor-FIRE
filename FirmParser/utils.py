@@ -13,7 +13,7 @@ import shutil
 
 
 BASE_DIR = './Parsing_Results'
-VENDOR_STR = ['dlink']
+VENDOR_STR = ['dlink', 'tplink', 'zyxel', 'netgear']
 
 def is_elf_file(file_path):
     """Check if a file is an ELF file by reading its magic number."""
@@ -30,9 +30,11 @@ def calculate_entropy(data):
         return 0
     
     # Calculate the frequency of each byte value in the data
-    frequency = [0] * 256
+    frequency = [0] * 256  # 각 바이트 값의 빈도를 저장할 리스트 생성
+    
     for byte in data:
-        frequency[byte] += 1
+        byte_value = byte if isinstance(byte, int) else ord(byte)  # 문자일 경우 ASCII 코드로 변환
+        frequency[byte_value] += 1  # 해당 바이트 값의 빈도 증가
     
     # Calculate the entropy
     entropy = 0
@@ -43,6 +45,11 @@ def calculate_entropy(data):
             entropy -= probability * math.log2(probability)
     
     return entropy
+
+def is_encrypted_file(data, threshold=7.5):
+    entropy = calculate_entropy(data)
+    return entropy >= threshold
+
 
 def format_time(seconds):
     """Convert seconds to a string in the format HH:MM:SS."""
@@ -59,9 +66,9 @@ def find_libraries(fs_path):
             file_path = os.path.join(root, file)
             if lib_regex.match(file_path):
                 libs.append(os.path.basename(file_path))
-    return libs
+    return list(set(libs))
 
-def extract_filesystem(firm_img):
+def extract_filesystem(firm_img, vendor):
     """
     This function extracts filesystem from decrypted firmware file by using binwalk
     <param>
@@ -69,7 +76,8 @@ def extract_filesystem(firm_img):
     <return>
     [extraction_dir]: extracted output from firmware file 
     """
-    extraction_dir = "Extracted_Firmware/"
+    # for TP_Link
+    extraction_dir = f"Extracted_Firmware_{vendor}/"
 
     if not os.path.isdir(extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"):
         result = subprocess.run(['binwalk', '-e', '-C', extraction_dir, firm_img], capture_output=True, text=True)
@@ -109,7 +117,7 @@ def extract_filesystem(firm_img):
             return dir_path
         
     # If no filesystem-like directories are found, remove the extraction directory
-    print("\033[91m[-]\033[0m There is no normal filesystem!")
+    print("\033[91m[-]\033[0m Error: Filesystem Not Found")
     shutil.rmtree(extraction_dir)
     
     return None
@@ -137,6 +145,28 @@ def print_blue_line():
     # Print the line
     print(blue_line)
 
+def print_formatted_message(binary_path):
+    # Get the terminal width
+    terminal_width = shutil.get_terminal_size().columns
+
+    # The message to be printed
+    message = f"\033[95m[*]Now parse <{os.path.basename(binary_path)}> with mango\033[0m"
+
+    # Calculate the remaining width after the message
+    message_length = len(message) - 7 # Exclude ANSI escape codes length
+    remaining_width = terminal_width - message_length
+
+    # Calculate the length of '=' on each side
+    equals_count = remaining_width // 2
+
+    # Create the '=' strings
+    equals = '=' * equals_count
+
+    # Print the final formatted message
+    formatted_message = f"\033[95m[*]{equals}Now parse <{os.path.basename(binary_path)}> with mango{equals}\033[0m"
+
+    print(formatted_message)
+
 def run_env_resolve(target_binary_path, destination_dir):
     """
     Runs the env_resolve command and returns the path of the resulting JSON file.
@@ -150,7 +180,7 @@ def run_env_resolve(target_binary_path, destination_dir):
     """
     try:
         # DEBUG
-        print(f"\033[95m[*] Now parse '{os.path.basename(target_binary_path)}' with mango\033[0m")
+        print_formatted_message(target_binary_path)
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
@@ -194,5 +224,6 @@ def results_exe_time_to_csv(results):
         writer.writerows(results)
     print(f"\033[92m[+]\033[0m Execution times saved to {results_output}")
 
-def initialize_dir():
-    shutil.rmtree('Extracted_Firmware')
+def initialize_dir(vendor):
+    # for
+    shutil.rmtree(f'Extracted_Firmware_{vendor}')

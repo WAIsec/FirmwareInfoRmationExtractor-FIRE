@@ -1,0 +1,2 @@
+web,public_bin,vendor_bin,config_file,libraries,Unparsed_bins
+[],[],"['busybox', 'ISS.exe']",['issdefault.conf'],"['libresolv-0.9.28.so', 'librt.so.0', 'libpthread.so.0', 'ld-uClibc.so.0', 'libcrypt-0.9.28.so', 'libpthread-0.9.28.so', 'libresolv.so.0', 'ld-uClibc-0.9.28.so', 'libc.so.0', 'libm.so.0', 'libdl.so.0', 'libgcc_s.so', 'libm-0.9.28.so', 'libgcc_s.so.1', 'libcrypt.so.0', 'libnsl.so.0', 'libnsl-0.9.28.so', 'libutil-0.9.28.so', 'libuClibc-0.9.28.so', 'libdl-0.9.28.so', 'ld-linux.so.2', 'librt-0.9.28.so', 'libutil.so.0']",[]
