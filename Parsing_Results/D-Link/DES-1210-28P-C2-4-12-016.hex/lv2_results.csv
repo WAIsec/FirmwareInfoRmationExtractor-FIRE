@@ -1,3 +1,0 @@
-bin_name,bin_arch,is_static,is_stripped,used_libs,keywords,used_nvram_env,checksec,hash_value,bdg
-ISS.exe,MIPS,0,1,"['libnsl.so.0', 'libpthread.so.0', 'libm.so.0', 'libgcc_s.so.1', 'libc.so.0']",Not parsed,Not parsed,"{'RELRO': 0, 'Canary': 0, 'NX': 1, 'PIE': 0, 'rpath': 0, 'runpath': 0}",38ced2c161d10c16b2b71ad8bb95d96bbb3344e26129242367a772e983237813,[]
-busybox,MIPS,0,1,['libc.so.0'],Not parsed,Not parsed,"{'RELRO': 0, 'Canary': 0, 'NX': 1, 'PIE': 0, 'rpath': 0, 'runpath': 0}",a0c655a3342f410b93fa0b2dda51829144d605476cbd083ed5692da78b6a6d3e,[]
