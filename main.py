@@ -53,7 +53,7 @@ def main_parser(firmware_path, results_file, vendor):
 
         # Level2 analyzing
         print("\033[92m[+]\033[0m Start Level2 Analysis")
-        lv2_analyzer = LevelTwoAnalyzer(fs_path=fs_path, bin_list=bins, libs=lv1_results['libraries'])
+        lv2_analyzer = LevelTwoAnalyzer(fs_path=fs_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], libs=lv1_results['libraries'])
         # Start parsing each binary
         lv2_analyzer.generate_info()
         bin_infos = lv2_analyzer.get_bin_infos()

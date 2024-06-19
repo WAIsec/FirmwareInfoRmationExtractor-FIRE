@@ -9,7 +9,7 @@ import hashlib
 EXCEPTION_CASE = ['ISS.exe', 'busybox']
 
 class LevelTwoAnalyzer:
-    def __init__(self, fs_path, p_bin, v_bin, libs):
+    def __init__(self, fs_path, bins, p_bin, v_bin, libs):
         """
         This class will be use to parse each binary
         p_bin: public binary
@@ -18,7 +18,7 @@ class LevelTwoAnalyzer:
         self.fs_path = fs_path
         self.v_bin = v_bin
         self.p_bin = p_bin
-        self.bin_list = v_bin + p_bin
+        self.bin_list = bins
         self.bin_infos = []
         self.lib_infos = dict()
         self.libs = []
@@ -31,12 +31,17 @@ class LevelTwoAnalyzer:
                 if is_elf_file(bin):
                     target = binNode(bin, self.lib_infos)
                     try:
-                        if any(exception in bin for exception in EXCEPTION_CASE) or bin in self.p_bin:
+                        if any(exception in bin for exception in EXCEPTION_CASE) or os.path.basename(bin) in self.p_bin:
                             print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)} due to exception case.")
                             target.analyze_exception()
-                        else:
+                            self.bin_infos.append(target.get_bin_info())
+                        elif os.path.basename(bin) in self.v_bin:
+                            print(f"\033[92m[+]\033[0m {os.path.basename(bin)} is vendor binary, which will be parsed more detail by using mango.")
                             target.analyze()
-                        self.bin_infos.append(target.get_bin_info())    
+                            self.bin_infos.append(target.get_bin_info())
+                        else:
+                            print(f"\033[91m[-]\033[0m {os.path.basename(bin)} is exceptional case.")
+                            
                     except Exception as e:
                         print(f"\033[91m[-]\033[0m Error: [lv2] generate_info->{e}")
                 else:
