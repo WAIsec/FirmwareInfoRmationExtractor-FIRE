@@ -14,7 +14,7 @@ class BDGinfo:
             # If bin doesn't have any env, ignore it
             if info['used_nvram_env'] != 1:
                 continue
-            for tar_bin_path, tar_bin_info in self.bin_info:
+            for tar_bin_path, tar_bin_info in self.bin_info.items():
                 # except itself
                 if bin_path == tar_bin_path:
                     continue
