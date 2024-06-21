@@ -19,11 +19,10 @@ class LevelTwoAnalyzer:
         self.v_bin = v_bin
         self.p_bin = p_bin
         self.bin_list = bins
-        self.bin_infos = []
+        self.bin_infos = dict()
         self.lib_infos = dict()
         self.libs = []
     
-    # revision
     def generate_info(self):
         
         for bin in self.bin_list:
@@ -32,13 +31,13 @@ class LevelTwoAnalyzer:
                     target = binNode(bin, self.lib_infos)
                     try:
                         if any(exception in bin for exception in EXCEPTION_CASE) or os.path.basename(bin) in self.p_bin:
-                            print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)} due to exception case.")
+                            print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)}.")
                             target.analyze_exception()
-                            self.bin_infos.append(target.get_bin_info())
+                            self.bin_infos[target.bin_name] = target.get_bin_info()
                         elif os.path.basename(bin) in self.v_bin:
                             print(f"\033[92m[+]\033[0m {os.path.basename(bin)} is vendor binary, which will be parsed more detail by using mango.")
                             target.analyze()
-                            self.bin_infos.append(target.get_bin_info())
+                            self.bin_infos[target.bin_name] = target.get_bin_info()
                         else:
                             print(f"\033[91m[-]\033[0m {os.path.basename(bin)} is exceptional case.")
                             
@@ -83,7 +82,7 @@ class binNode:
         
     def get_bin_info(self):
         info_dict = {
-            'bin_name': self.bin_name,
+            # 'bin_name': self.bin_name,
             'bin_arch': self.bin_arch,
             'is_static': self.is_static,
             'is_stripped': self.is_stripped,

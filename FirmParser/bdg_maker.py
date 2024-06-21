@@ -9,21 +9,21 @@ class BDGinfo:
         return self.bin_info
 
     def find_chain(self):
-        for std_bin in self.bin_info:
-            std_bin['bdg'] = []
+        for bin_path, info in self.bin_info.items():
             connections = []
             # If bin doesn't have any env, ignore it
-            if std_bin['used_nvram_env'] != 1:
+            if info['used_nvram_env'] != 1:
                 continue
-            for tar_bin in self.bin_info:
+            for tar_bin_path, tar_bin_info in self.bin_info:
                 # except itself
-                if std_bin['bin_name'] == tar_bin['bin_name']:
+                if bin_path == tar_bin_path:
                     continue
-                for keyword in std_bin['keywords']:
-                    if keyword in tar_bin['keywords']:
-                        connections.append(tar_bin['bin_name'])
+
+                for keyword in info['keywords']:
+                    if keyword in tar_bin_info['keywords']:
+                        connections.append(tar_bin_path)
                         break
                     else:
                         continue
             # update BDG
-            std_bin['bdg'] = list(set(connections))
+            self.bin_info[bin_path]['bdg'] = list(set(connections))

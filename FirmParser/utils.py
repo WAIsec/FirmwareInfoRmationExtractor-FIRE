@@ -3,6 +3,7 @@ import subprocess
 import os
 import time
 import magic
+import json
 import csv
 import zipfile
 import tarfile
@@ -13,7 +14,8 @@ import shutil
 
 
 BASE_DIR = './Parsing_Results'
-VENDOR_STR = ['dlink', 'tplink', 'zyxel', 'netgear']
+# 지속적인 업데이트 필요
+VENDOR_STR = ['dlink', 'tplink', 'zyxel', 'netgear', 'zy']
 
 def is_elf_file(file_path):
     """Check if a file is an ELF file by reading its magic number."""
@@ -204,6 +206,15 @@ def run_env_resolve(target_binary_path, destination_dir):
         print(f"\033[91m[-]\033[0m An error occurred: {e}")
         return -1
 
+def save_to_json(data, filename):
+    """Saves a dictionary to a JSON file with proper indentation."""
+    if not isinstance(data, dict):
+        raise ValueError("Data must be a dictionary")
+    
+    # Save to JSON file with indentation
+    with open(filename, 'w') as json_file:
+        json.dump(data, json_file, indent=4, ensure_ascii=False)
+        
 def save_to_csv(data, filename):
     """Saves a list of dictionaries to a CSV file."""
     if not isinstance(data, list):

@@ -47,29 +47,31 @@ def main_parser(firmware_path, results_file, vendor):
 
         # Store lv1_results
         print("\033[92m[+]\033[0m Start Level1 Analysis")
-        lv1_results_output = os.path.join(output_dir, "lv1_results.csv")
-        save_to_csv(lv1_results, lv1_results_output)
+        lv1_results_output = os.path.join(output_dir, "lv1_results.json")
+        save_to_json(lv1_results, lv1_results_output)
         print("\033[92m[+]\033[0m Finish Level1 Analysis")
 
         # Level2 analyzing
         print("\033[92m[+]\033[0m Start Level2 Analysis")
         lv2_analyzer = LevelTwoAnalyzer(fs_path=fs_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], libs=lv1_results['libraries'])
+        
         # Start parsing each binary
         lv2_analyzer.generate_info()
-        bin_infos = lv2_analyzer.get_bin_infos()
+        bin_info = lv2_analyzer.get_bin_infos()
+
         # Generate BDG data and update initial bin_infos
-        generator = BDGinfo(bin_infos)
-        bin_infos = generator.update_bdg()
+        generator = BDGinfo(bin_info)
+        bin_info = generator.update_bdg()
 
         # Store lv2_results
-        lv2_results_output = os.path.join(output_dir, "lv2_results.csv")
+        lv2_results_output = os.path.join(output_dir, "lv2_results.json")
         print("\033[92m[+]\033[0m Finish Level2 Analysis")
 
         # remove full path
-        for bin in bin_infos:
-            del bin['full_path']
+        for bin_path, info in bin_info.items():
+            del info['full_path']
 
-        save_to_csv(bin_infos, lv2_results_output)
+        save_to_json(bin_info, lv2_results_output)
         # check end_time
         end_time = time.time()
         # calculate total time
@@ -77,7 +79,7 @@ def main_parser(firmware_path, results_file, vendor):
         exe_time = format_time(exe_time)
         # store time results
         with open(results_file, 'a') as f:
-            f.write(f"{firm_name},{exe_time}\n")
+            f.write(f"{firm_name}/{exe_time}\n")
 
 def main():
     """
