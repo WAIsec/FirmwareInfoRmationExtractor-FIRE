@@ -14,8 +14,15 @@ import shutil
 
 
 BASE_DIR = './Parsing_Results'
-# 지속적인 업데이트 필요
-VENDOR_STR = ['dlink', 'tplink', 'zyxel', 'netgear', 'zy']
+
+def load_vendor_strings_from_file(filepath):
+    try:
+        with open(filepath, 'r') as file:
+            vendor_strings = [line.strip() for line in file.readlines() if line.strip()]
+            return vendor_strings
+    except Exception as e:
+        print(f"Error loading vendor strings from file: {e}")
+        return []
 
 def is_elf_file(file_path):
     """Check if a file is an ELF file by reading its magic number."""
@@ -128,12 +135,16 @@ def extract_bins(fs_path):
     bins = []
     mime = magic.Magic(mime=True)
     for root, dirs, files in os.walk(fs_path):
-        for file in files:
-            file_path = os.path.join(root, file)
-            if os.path.isfile(file_path):
-                mime_type = mime.from_file(file_path)
-                if mime_type is not None and mime_type.startswith('application/x-executable'):
-                    bins.append(file_path)
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    if os.path.isfile(file_path):
+                        mime_type = mime.from_file(file_path)
+                        if mime_type is not None and mime_type.startswith('application/x-executable'):
+                            bins.append(file_path)
+                except Exception as e:
+                    print(f"\033[91m[-]\033[0m Error at {os.path.basename(file_path)}: extract_bins -> {e}")
+                    continue
     return bins
 
 def print_blue_line():
@@ -165,6 +176,7 @@ def print_formatted_message(binary_path):
     equals = '=' * equals_count
 
     # Print the final formatted message
+    print("")
     formatted_message = f"\033[95m[*]{equals}Now parse <{os.path.basename(binary_path)}> with mango{equals}\033[0m"
 
     print(formatted_message)
@@ -187,8 +199,10 @@ def run_env_resolve(target_binary_path, destination_dir):
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
         # Execute the command with a timeout
-        subprocess.run(command, shell=True, check=True, timeout=1800)
+        subprocess.run(command, shell=True, check=True, timeout=600)
         
+        # empty line
+        print("")
         # Assuming the result JSON file is saved in the destination directory
         # and has a known pattern or name
         result_json_path = os.path.join(destination_dir, 'env.json')

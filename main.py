@@ -9,7 +9,7 @@ from FirmParser.bdg_maker import *
 from FirmParser.unpacker import *
 
 
-def main_parser(firmware_path, results_file, vendor):
+def main_parser(firmware_path, results_file, vendor, vendor_keyword):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
@@ -38,7 +38,7 @@ def main_parser(firmware_path, results_file, vendor):
 
     # Level1 analyzing
     bins = list(set(extract_bins(fs_path)))
-    lv1_analyzer = LevelOneAnalyzer(fs_path, bins)
+    lv1_analyzer = LevelOneAnalyzer(fs_path, bins, vendor_keyword)
     if lv1_analyzer.analyze():
         print(f"\033[91m[-]\033[0m Something wrong happened while analyzing {firmware_path}")
     else:
@@ -80,6 +80,9 @@ def main_parser(firmware_path, results_file, vendor):
         # store time results
         with open(results_file, 'a') as f:
             f.write(f"{firm_name}/{exe_time}\n")
+        
+        # 분석 완료한 펌웨어 삭제
+        del firmware_path
 
 def main():
     """
@@ -90,6 +93,7 @@ def main():
     
     # arg1 is the directory containing firmware files
     parser.add_argument("directory", type=str, help="Directory containing firmware files")
+    parser.add_argument("vendor_keyword_file", type=str, help="Path of file was written about vendor's keyword")
     parser.add_argument("vendor", type=str, help="Target Vendor name")
     args = parser.parse_args()
 
@@ -120,9 +124,12 @@ def main():
     with open(results_file, 'w') as f:
         f.write("firmware,execution_time\n")
 
+    # set vendor_keyword
+    vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
+
     for firmware_file in firmware_files:
         print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_file)}>")
-        main_parser(firmware_file, results_file, args.vendor)
+        main_parser(firmware_file, results_file, args.vendor, vendor_keyword)
         print_blue_line()
         initialize_dir(args.vendor)
 

@@ -1,11 +1,11 @@
 import os
 import subprocess
 import magic
-from FirmParser.utils import VENDOR_STR, find_libraries
+from FirmParser.utils import find_libraries
 WEB_EXTENSION = ['.html', '.htm', '.xhtml', '.xml', '.css', '.scss', '.sass', '.less', '.js', '.ts', '.jsx', '.tsx', '.php', '.asp', '.aspx', '.jsp']
 
 class LevelOneAnalyzer:
-    def __init__(self, fs_path, bins):
+    def __init__(self, fs_path, bins, vendor_keyword):
         self.fs_path = fs_path
         self.bins = bins
         self.web_files = []
@@ -13,6 +13,7 @@ class LevelOneAnalyzer:
         self.ven_bins = []
         self.conf_files = []
         self.libs = find_libraries(fs_path)
+        self.vendor_keyword = vendor_keyword
         # for debugging
         self.exceptional_bins = []
 
@@ -55,31 +56,46 @@ class LevelOneAnalyzer:
         lib_exts = ['.so', '.dll', '.dylib']
         for bin in self.bins:
             filename = os.path.basename(bin)
+            ven_flag = False
 
             # Exclude library files
             if any(ext in filename.lower() for ext in lib_exts):
                 continue
 
             # Check if any manufacturer string is in the filename (case-insensitive)
-            if any(vendor_str.lower() in filename.lower() for vendor_str in VENDOR_STR):
+            if any(keyword.lower() in filename.lower() for keyword in self.vendor_keyword):
                 self.ven_bins.append(filename)
                 continue
 
-            # Check if any manufacturer string is in the file content using grep (case-insensitive)
+            # Check if any manufacturer string is in the file content using strings
             try:
-                for vendor_str in VENDOR_STR:
-                    result = subprocess.run(['grep', '-q', vendor_str, bin], capture_output=True, text=True, encoding='unicode_escape')
-                    if result.returncode == 0:  # grep returns 0 if a match is found
+                strings_output = subprocess.run(['strings', bin], capture_output=True, text=True, encoding='utf-8')
+                if strings_output.returncode == 0:
+                    strings_content = strings_output.stdout.lower()
+                    if any(keyword.lower() in strings_content for keyword in self.vendor_keyword):
                         self.ven_bins.append(filename)
-                        break
-                    else:
-                        self.os_bins.append(filename)
+                        ven_flag = True
+                if not ven_flag:
+                    # Check if any manufacturer string is in the symbols using nm
+                    nm_output = subprocess.run(['nm', '-g', bin], capture_output=True, text=True, encoding='utf-8')
+                    if nm_output.returncode == 0:
+                        nm_content = nm_output.stdout.lower()
+                        if any(keyword.lower() in nm_content for keyword in self.vendor_keyword):
+                            self.ven_bins.append(filename)
+                            ven_flag = True
+
+                # If still not a vendor binary, add to os_bin
+                if not ven_flag:
+                    self.os_bins.append(filename)
+
             except Exception as e:
                 print(f"\033[91m[-]\033[0m Error processing file {filename}: [lv1] classfy_binary->{e}")
+                # Handle binary analysis errors by adding to exceptional_bins
                 self.exceptional_bins.append(filename)
 
-            self.ven_bins = list(set(self.ven_bins))
-            self.os_bins = list(set(self.os_bins))
+        # Remove duplicates and reinitialize lists
+        self.ven_bins = list(set(self.ven_bins))
+        self.os_bins = list(set(self.os_bins))
 
     def find_configuration_files(self):
         """
