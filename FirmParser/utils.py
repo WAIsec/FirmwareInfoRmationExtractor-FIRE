@@ -14,6 +14,19 @@ import shutil
 
 
 BASE_DIR = './Parsing_Results'
+COMMON_SYM = ['_init', '__init__', '_finit', '_fini']
+IO_FUNC = ["fopen", "fread", "fwrite", "fclose", "open", "read", "write", "close"]
+DB_FUNC = ["sqlite3_open", "sqlite3_exec", "sqlite3_close", "mysql_init", "mysql_query", "mysql_close", "PQconnectdb", "PQexec", "PQfinish", "query", "db"]
+ENC_FUNC = ["encrypt", "decrypt"]
+TEE_FUNC = ["TEEC_InitializeContext", "TEEC_OpenSession", "TEEC_InvokeCommand", "TEEC_CloseSession", "TEEC_FinalizeContext", "sgx_create_enclave", "sgx_ecall", "sgx_destroy_enclave"]
+# interesting str 관련 정규식 표현
+STR_PATTERNS = {
+    'Key': r"\b[A-Fa-f0-9]{32}\b",
+    'IV': r"\b[A-Fa-f0-9]{16}\b",
+    'URL': r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+",
+    'E-mail': r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+    'IP': r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+}
 
 def load_vendor_strings_from_file(filepath):
     try:
@@ -68,68 +81,93 @@ def format_time(seconds):
 
 # extract libs from fs
 def find_libraries(fs_path):
-    libs = []
+    libs_base = []
+    libs_full = []
     lib_regex = re.compile(r'.*\.(so(\.\d+)*|a|dylib|dll)$')
     for root, dirs, files in os.walk(fs_path):
         for file in files:
             file_path = os.path.join(root, file)
             if lib_regex.match(file_path):
-                libs.append(os.path.basename(file_path))
-    return list(set(libs))
+                libs_base.append(os.path.basename(file_path))
+                libs_full.append(file_path)
+    return list(set(libs_base)), list(set(libs_full))
 
-def extract_filesystem(firm_img, vendor):
+def extract_filesystem(target_path, vendor):
     """
-    This function extracts filesystem from decrypted firmware file by using binwalk
+    주어진 경로(target_path) 내의 모든 펌웨어 파일을 순회하여 Binwalk를 통해 파일 시스템을 추출합니다.
     <param>
-    [firm]: firmware file path
+    [target_path]: 펌웨어 파일들이 포함된 상위 디렉토리
+    [vendor]: 벤더 이름으로 디렉토리 정리
     <return>
-    [extraction_dir]: extracted output from firmware file 
+    [extraction_dir]: 추출된 파일 시스템 디렉토리 경로
     """
-    # for TP_Link
-    extraction_dir = f"Extracted_Firmware_{vendor}/"
+    extraction_base = f"Extracted_{vendor}_FS/"
+    os.makedirs(extraction_base, exist_ok=True)
 
-    if not os.path.isdir(extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"):
-        result = subprocess.run(['binwalk', '-e', '-C', extraction_dir, firm_img], capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"\033[91m[-]\033[0m Binwalk extraction failed: {result.stderr}")
-    # set up
-    extraction_dir = extraction_dir + "_" + os.path.basename(firm_img) + ".extracted/"
-    directories = os.listdir(extraction_dir)
-    for dir_name in directories:
-        dir_path = os.path.join(extraction_dir, dir_name)
-        if os.path.isdir(dir_path):
-            # Check if directory is empty
-            if not any(os.listdir(dir_path)):
-                print(f"\033[91m[-]\033[0m No content found in {dir_path}, removing...")
-                shutil.rmtree(dir_path)
-                continue
-            
-            # Check if directory contains only one level of content
-            subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
-            if not subdirs:
-                print(f"\033[91m[-]\033[0m No subdirectories found in {dir_path}, removing...")
-                shutil.rmtree(dir_path)
-                continue
-                
-            # Check if any directory contains content
-            content_found = False
-            for subdir in subdirs:
-                if os.listdir(os.path.join(dir_path, subdir)):
-                    content_found = True
-                    break
-            if not content_found:
-                print(f"\033[91m[-]\033[0m No content found in subdirectories of {dir_path}, removing...")
-                shutil.rmtree(dir_path)
-                continue
-                
-            print(f"\033[92m[+]\033[0m Valid filesystem found: {dir_path}")
-            return dir_path
+    # target_path 내의 모든 파일과 하위 디렉토리를 순회
+    for root, dirs, files in os.walk(target_path):
         
-    # If no filesystem-like directories are found, remove the extraction directory
-    print("\033[91m[-]\033[0m Error: Filesystem Not Found")
-    shutil.rmtree(extraction_dir)
+        for file in files:
+            try:
+                # 펌웨어 파일이 맞다면 (확장자 체크 등 필요시 추가 가능)
+                firm_img = os.path.join(root, file)
+                extracted_dir = os.path.join(extraction_base, '_' + os.path.basename(firm_img) + ".extracted")
+                clean_dir = os.path.join(extraction_base, '_'+os.path.basename(firm_img))  # .extracted 제거한 깨끗한 폴더 이름
+                
+                if not os.path.isdir(clean_dir):
+                    # Binwalk 실행하여 파일 시스템 추출
+                    result = subprocess.run(['binwalk', '-e', '-C', extraction_base, firm_img], capture_output=True, text=True)
+                    if result.returncode != 0:
+                        raise RuntimeError(f"\033[91m[-]\033[0m Binwalk 추출 실패: {result.stderr}")
+                    
+                    # .extracted 폴더 이름을 깨끗한 폴더 이름으로 변경
+                    if os.path.exists(extracted_dir):
+                        os.rename(extracted_dir, clean_dir)
+
+                directories = os.listdir(clean_dir)
+                for dir_name in directories:
+                    dir_path = os.path.join(clean_dir, dir_name)
+                    if os.path.isdir(dir_path):
+                        # 디렉토리가 비어있는지 체크
+                        if not any(os.listdir(dir_path)):
+                            print(f"\033[91m[-]\033[0m {dir_path}에 콘텐츠가 없어 삭제합니다.")
+                            shutil.rmtree(dir_path)
+                            continue
+                        
+                        # 하위 디렉토리가 있는지 체크
+                        subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
+                        if not subdirs:
+                            print(f"\033[91m[-]\033[0m {dir_path}에 하위 디렉토리가 없어 삭제합니다.")
+                            shutil.rmtree(dir_path)
+                            continue
+                            
+                        # 하위 디렉토리에 콘텐츠가 있는지 체크
+                        content_found = False
+                        for subdir in subdirs:
+                            if os.listdir(os.path.join(dir_path, subdir)):
+                                content_found = True
+                                break
+                        if not content_found:
+                            print(f"\033[91m[-]\033[0m {dir_path}의 하위 디렉토리에도 콘텐츠가 없어 삭제합니다.")
+                            shutil.rmtree(dir_path)
+                            continue
+                            
+                        print(f"\033[92m[+]\033[0m 유효한 파일 시스템 발견: {dir_path}")
+
+                # clean_dir 내부에 남은 파일이나 폴더가 없으면 clean_dir 삭제
+                if not os.listdir(clean_dir):
+                    print(f"\033[91m[-]\033[0m 파일 시스템 추출 실패: {clean_dir}를 삭제합니다.")
+                    shutil.rmtree(clean_dir)
+
+            except Exception as e:
+                print(f"\033[91m[-]\033[0m 오류 발생: {e}")
+                continue
+
     
+    print(f"\033[92m[+]\033[0m 전체 파일 시스템 추출 완료")
     return None
+
+        
 
 def extract_bins(fs_path):
     bins = []
@@ -194,15 +232,12 @@ def run_env_resolve(target_binary_path, destination_dir):
     """
     try:
         # DEBUG
-        print_formatted_message(target_binary_path)
+        # print_formatted_message(target_binary_path)
         # Construct the command
         command = f"env_resolve '{target_binary_path}' --results '{destination_dir}'"
 
         # Execute the command with a timeout
-        subprocess.run(command, shell=True, check=True, timeout=600)
-        
-        # empty line
-        print("")
+        subprocess.run(command, shell=True, check=True, timeout=600, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # Assuming the result JSON file is saved in the destination directory
         # and has a known pattern or name
         result_json_path = os.path.join(destination_dir, 'env.json')
@@ -212,7 +247,6 @@ def run_env_resolve(target_binary_path, destination_dir):
         else:
             print("\033[91m[-]\033[0m Result JSON file does not exist.")
             return -1
-            
     except subprocess.TimeoutExpired:
         print("\033[91m[-]\033[0m TIME OUT: The command execution exceeded 1800 seconds.")
         return -1
@@ -252,3 +286,53 @@ def results_exe_time_to_csv(results):
 def initialize_dir(vendor):
     # for
     shutil.rmtree(f'Extracted_Firmware_{vendor}')
+
+def remove_empty_values(dictionary):
+    """
+    사전에서 value 값이 비어 있는 key 값을 삭제합니다.
+
+    Parameters:
+    dictionary (dict): value 값이 비어 있는 key 값을 삭제할 사전
+
+    Returns:
+    dict: value 값이 비어 있는 key 값이 삭제된 새로운 사전
+    """
+    return {k: v for k, v in dictionary.items() if v}
+
+def extract_strings(binary_path):
+    result = subprocess.run(["strings", binary_path], capture_output=True, text=True)
+    return result.stdout.splitlines()
+
+def flatten_directory_structure(parent_dir):
+    """
+    주어진 경로의 하위 디렉토리들을 모두 삭제하고, 하위 경로에 있는 파일들을 상위 디렉토리로 이동합니다.
+    
+    <param>
+    [parent_dir]: 파일들을 상위 디렉토리로 이동시키고, 하위 디렉토리들을 삭제할 상위 디렉토리 경로
+    """
+    try:
+        # 1. 모든 하위 디렉토리와 파일을 탐색
+        for root, dirs, files in os.walk(parent_dir, topdown=False):
+            # 2. 하위 경로에 있는 모든 파일을 상위 디렉토리로 이동
+            for file in files:
+                try:
+                    file_path = os.path.join(root, file)
+                    # 파일을 상위 디렉토리로 이동
+                    shutil.move(file_path, parent_dir)
+                    print(f"Moved {file_path} to {parent_dir}")
+                except:
+                    pass
+            # 3. 하위 디렉토리들을 삭제
+            for dir in dirs:
+                dir_path = os.path.join(root, dir)
+                if os.path.isdir(dir_path):
+                    try:
+                        shutil.rmtree(dir_path)  # 비어있지 않은 디렉토리 삭제
+                        print(f"Deleted directory: {dir_path}")
+                    except Exception as e:
+                        print(f"Failed to delete {dir_path}: {e}")
+        
+        print("All files moved and directories deleted.")
+    
+    except Exception as e:
+        print(f"Error occurred: {e}")

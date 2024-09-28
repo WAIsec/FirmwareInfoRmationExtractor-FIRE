@@ -52,8 +52,11 @@ def decompress_files(directory):
     for root, dirs, files in os.walk(directory, topdown=False):
         for dir in dirs:
             folder_path = os.path.join(root, dir)
-            if not os.listdir(folder_path):  # 폴더가 비어있는지 확인
-                os.rmdir(folder_path)  # 비어있으면 삭제
+            try:
+                if not os.listdir(folder_path):  # 폴더가 비어있는지 확인
+                    os.rmdir(folder_path)  # 비어있으면 삭제
+            except Exception as e:
+                pass
     
     for root, dirs, files in os.walk(directory):
         for filename in files:

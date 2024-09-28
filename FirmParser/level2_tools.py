@@ -5,11 +5,12 @@ from FirmParser.utils import *
 from FirmParser.lib_parser import *
 import json
 import hashlib
+import lief
 
 EXCEPTION_CASE = ['ISS.exe', 'busybox']
 
 class LevelTwoAnalyzer:
-    def __init__(self, fs_path, bins, p_bin, v_bin, libs):
+    def __init__(self, fs_path, bins, p_bin, v_bin, lib_infos):
         """
         This class will be use to parse each binary
         p_bin: public binary
@@ -20,8 +21,7 @@ class LevelTwoAnalyzer:
         self.p_bin = p_bin
         self.bin_list = bins
         self.bin_infos = dict()
-        self.lib_infos = dict()
-        self.libs = []
+        self.lib_infos = lib_infos
     
     def generate_info(self):
         
@@ -30,17 +30,19 @@ class LevelTwoAnalyzer:
                 if is_elf_file(bin):
                     target = binNode(bin, self.lib_infos)
                     try:
-                        if any(exception in bin for exception in EXCEPTION_CASE) or os.path.basename(bin) in self.p_bin:
+                        if any(exception in bin for exception in EXCEPTION_CASE):
+                        # if any(exception in bin for exception in EXCEPTION_CASE):
                             print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)}.")
                             target.analyze_exception()
                             self.bin_infos[target.bin_name] = target.get_bin_info()
-                        elif os.path.basename(bin) in self.v_bin:
-                            print(f"\033[92m[+]\033[0m {os.path.basename(bin)} is vendor binary, which will be parsed more detail by using mango.")
+                        # elif os.path.basename(bin) in self.v_bin:
+                        elif os.path.basename(bin) in self.v_bin or os.path.basename(bin) in self.p_bin:
+                            # print(f"\033[92m[+]\033[0m {os.path.basename(bin)} is vendor binary, which will be parsed more detail by using mango.")
+                            print(f"\033[92m[+]\033[0m {os.path.basename(bin)} will be parsed more detail by using mango.")
                             target.analyze()
                             self.bin_infos[target.bin_name] = target.get_bin_info()
                         else:
                             print(f"\033[91m[-]\033[0m {os.path.basename(bin)} is exceptional case.")
-                            
                     except Exception as e:
                         print(f"\033[91m[-]\033[0m Error: [lv2] generate_info->{e}")
                 else:
@@ -49,11 +51,7 @@ class LevelTwoAnalyzer:
             except Exception as e:
                 print(f"\033[91m[-]\033[0m Error<{os.path.basename(bin)}>: [lv2] generate_info->{e}")
                 continue
-
-    def set_lib_infos(self):
-        parser = LibParser(self.fs_path, self.libs)
-        self.lib_infos = parser.get_lib_symbols()
-
+            
     def get_bin_infos(self):
         return self.bin_infos
 
@@ -66,10 +64,12 @@ class binNode:
         self.is_static = None
         self.is_stripped = None
         self.used_libs = []
+        self.lib_sym_pair = dict()
         self.libs_info = libs_info
         self.keywords = []
         self.nvram_env_used = None
         self.hash_value = None
+        self.bin_symbols = []
         self.checksec = {
             # 0: No applied, 1: applied, 2: high level applied
             'RELRO': None,
@@ -79,6 +79,19 @@ class binNode:
             'rpath': None,
             'runpath': None,
         }
+        self.features = {   # 바이너리가 수행하는 특정 기능
+            'File_IO': False,
+            'DB_handling': False,
+            'Encryption': False,
+            'TEE': False
+        }
+        self.interesting_str = {    # 바이너리 내 존재하는 흥미로운 문자열 후보
+            "Key":[],
+            "IV": [],
+            "URL": [],
+            "E-mail": [],
+            "IP": []
+        }
         
     def get_bin_info(self):
         info_dict = {
@@ -87,8 +100,11 @@ class binNode:
             'is_static': self.is_static,
             'is_stripped': self.is_stripped,
             'used_libs': self.used_libs,
+            'lib_sym_pair': self.lib_sym_pair,
             'keywords': self.keywords,
             'used_nvram_env': self.nvram_env_used,
+            'facilities': self.features,
+            'strings': self.interesting_str,
             'checksec': self.checksec,
             'hash_value': self.hash_value,
             'full_path': self.bin_path
@@ -97,11 +113,16 @@ class binNode:
     
     def analyze(self):
         try:
+            print(f"\033[92m[+]\033[0m Now, Parse {self.bin_name}.")
             self.basic_parsing()
             self.calculate_file_hash()
             self.check_sec_opt()
             self.check_refer_env_nvram()
             self.check_used_library()
+            self.make_lib_sym_pair()
+            self.parse_facilities()
+            self.find_interesting_str()
+            print(f"\033[92m[+]\033[0m {self.bin_name} was parsed completely.")
             return 0
         except Exception as e:
             print(f"\033[91m[-]\033[0m Error: [lv2] analyze->{e}")
@@ -109,12 +130,17 @@ class binNode:
         
     def analyze_exception(self):
         try:
+            print(f"\033[92m[+]\033[0m Now, Parse {self.bin_name}.")
             self.basic_parsing()
             self.calculate_file_hash()
             self.check_sec_opt()
             self.check_used_library()
+            self.make_lib_sym_pair()
+            self.parse_facilities()
+            self.find_interesting_str()
             self.keywords = 'Not parsed'
             self.nvram_env_used = 'Not parsed'
+            print(f"\033[92m[+]\033[0m {self.bin_name} was parsed completely.")
             return 0
         except Exception as e:
             print(f"\033[91m[-]\033[0m Error: [lv2] analyze_exception->{e}")
@@ -155,6 +181,44 @@ class binNode:
         else:
             self.is_stripped = 'Unknown'
 
+    def check_used_library(self):
+            try:
+                # extract libraries from dynamic executable binaries
+                if not self.is_static:
+                    result = subprocess.run(['readelf', '-d', self.bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    if result.returncode != 0:
+                        print(f"\033[91m[-]\033[0m Error running readelf: {result.stderr}")
+                        return
+                    # processing result
+                    lines = result.stdout.splitlines()
+                    for line in lines:
+                        match = re.search(r'library: \[(.*?)\]', line)
+                        if match:
+                            lib_name = match.group(1)
+                            self.used_libs.append(lib_name)
+                # extract libraries from static executable binaries
+                else:
+                    # if binary was stripped, we cannot find anything
+                    if self.is_stripped:
+                        self.used_libs = []
+                    else:
+                        try:
+                            result = subprocess.run(['nm', '-D', self.bin_path], capture_output=True, text=True, check=True)
+                            bin_sym = result.stdout.strip().split('\n')
+                            if not bin_sym:
+                                self.used_libs = []
+                            for lib, lib_sym in self.libs_info.items():
+                                if any(symbol in bin_sym for symbol in lib_sym):
+                                    self.used_libs.append(lib)
+
+                        except subprocess.CalledProcessError as e:
+                            print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: {e}")
+                            return
+
+            except Exception as e:
+                print(f"\033[91m[-]\033[0m Error: [lv2] check_used_library->{e}")
+                return
+    
     def check_sec_opt(self):
         """
         This method finds the security option applied to target binary
@@ -273,7 +337,8 @@ class binNode:
                 data = json.load(file)
                 if len(data.get('results', [])) > 0:
                     self.nvram_env_used = 1
-                    # extract keywords
+                    # Revision Position
+                    # extract keywords -> 이 부분에서 키워드 추가 (여기서 해당 키워드를 인자로 사용하는 함수 이름까지 가져오면 Setter-Getter Chain 연결 가능)
                     for func_name, func_data in data.get("results", {}).items():
                         if isinstance(func_data, dict):
                             for key_name in func_data.keys():
@@ -293,45 +358,39 @@ class binNode:
             except Exception as e:
                 print(f"\033[91m[-]\033[0m Error deleting JSON file: {e}")
     
-    def check_used_library(self):
+    def make_lib_sym_pair(self):
         try:
-            # extract libraries from dynamic executable binaries
-            if not self.is_static:
-                result = subprocess.run(['readelf', '-d', self.bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-                if result.returncode != 0:
-                    print(f"\033[91m[-]\033[0m Error running readelf: {result.stderr}")
-                    return
-                # processing result
-                lines = result.stdout.splitlines()
-                for line in lines:
-                    match = re.search(r'library: \[(.*?)\]', line)
-                    if match:
-                        lib_name = match.group(1)
-                        self.used_libs.append(lib_name)
-            # extract libraries from static executable binaries
-            else:
-                # if binary was stripped, we cannot find anything
-                if self.is_stripped:
-                    self.used_libs = []
-                else:
-                    try:
-                        result = subprocess.run(['nm', '-D', self.bin_path], capture_output=True, text=True, check=True)
-                        bin_sym = result.stdout.strip().split('\n')
-                        if not bin_sym:
-                            self.used_libs = []
-                        for lib, lib_sym in self.libs_info.items():
-                            if any(symbol in bin_sym for symbol in lib_sym):
-                                self.used_libs.append(lib)
-
-                    except subprocess.CalledProcessError as e:
-                        print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: {e}")
-                        return
-
+            # binary symbol
+            self.bin_symbols = self.find_binary_symbols()
+            # matched_syms = []
+            # for lib, syms in self.libs_info.items():
+            #     for bin_sym in self.bin_symbols:
+            #         if bin_sym in syms:
+            #             matched_syms.append(bin_sym)
+            #     # Test Log
+            #     # print(f"Bin_Syms-> lib:{lib}, syms:{matched_syms}")
+            #     if len(matched_syms) > 0:
+            #         self.lib_sym_pair[lib] = matched_syms
+            #         # initialized
+            #         matched_syms = []
+            # return    
+            for bin_sym in self.bin_symbols:
+                find_flag = False
+                for lib in self.used_libs:
+                    if not lib in self.lib_sym_pair:
+                        self.lib_sym_pair[lib] = []
+                    for sym in self.libs_info[lib]:
+                        if bin_sym == sym:
+                            find_flag = True
+                            self.lib_sym_pair[lib].append(bin_sym)
+                            break
+                    if find_flag:
+                        break
+            self.lib_sym_pair = remove_empty_values(self.lib_sym_pair)
         except Exception as e:
             print(f"\033[91m[-]\033[0m Error: [lv2] check_used_library->{e}")
             return
-        
-                
+                  
     def calculate_file_hash(self, hash_algo='sha256'):
         """Calculates the hash of a file using the specified hashing algorithm."""
         hash_func = hashlib.new(hash_algo)
@@ -340,3 +399,83 @@ class binNode:
             for byte_block in iter(lambda: f.read(4096), b""):
                 hash_func.update(byte_block)
         self.hash_value = hash_func.hexdigest()
+
+    def parse_facilities(self):
+        """
+         바이너리의 내부 기능에 대해 분석하는 함수
+         [파일 IO 기능, DB 핸들링 기능, 암호화 기능]
+        """
+        bin = lief.parse(self.bin_path)
+        for func in bin.imported_functions:
+            for cand in IO_FUNC:
+                if cand in func.name:
+                    self.features["File_IO"] = True
+            # DB 핸들링 관련
+            for cand in DB_FUNC:
+                if cand in func.name:
+                    self.features["DB_handling"] = True
+            # 암호화 관련
+            for cand in ENC_FUNC:
+                if cand in func.name :
+                    self.features["Encryption"] = True
+            for cand in TEE_FUNC:
+                if cand in func.name:
+                    self.features["TEE"] = True
+
+    def find_interesting_str(self):
+        """
+         바이너리 내 흥미로운 문자열 수집하는 함수 (e.g., 암호키, IV, URL, E-mail, IP 등)
+        """
+        strings = extract_strings(self.bin_path)
+        
+        # 기존에 찾아놨던 문자열 패턴을 활용하여 분석
+        for string in strings:
+            for key, pattern in STR_PATTERNS.items():
+                if (key=='Key' or key=='IV') and self.features['Encryption']==False:
+                    continue    # 암호화와 관련된 바이너리가 아닌 경우 Key가 있을 필요가 없음 --> 무시하고 진행
+                if re.search(pattern, string):
+                    self.interesting_str[key].append(string)
+
+        # 중복 제거
+        for key, str in self.interesting_str.items():
+            self.interesting_str[key] = list(set(self.interesting_str[key]))
+
+    def find_binary_symbols(self):
+        try:
+            readelf_s_output = subprocess.check_output(['readelf', '-s', '--wide',  self.bin_path], stderr=subprocess.DEVNULL)
+            readelf_s_output = readelf_s_output.decode('utf-8')
+            lines = readelf_s_output.split('\n')
+            
+            header_found = False
+            symbols = []
+
+            for line in lines:
+                if 'Num:' in line:
+                    header_found = True
+                    continue
+                
+                if not header_found:
+                    continue
+                
+                columns = line.split()
+                if len(columns) < 8:
+                    continue
+
+                try:
+                    sym_type = columns[3]
+                    name = columns[-1]
+                    function_name = name.split('@')[0]
+                    if sym_type == 'FUNC':
+                        # 공통 심볼 제외
+                        if function_name in COMMON_SYM:
+                            continue
+                        symbols.append(function_name)
+                except ValueError:
+                    print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
+                    continue
+            # 심볼 중복 제거 후 반환
+            return list(set(symbols))
+            
+        except subprocess.CalledProcessError as e:
+            print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
+            return []

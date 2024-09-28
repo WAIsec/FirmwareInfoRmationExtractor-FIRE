@@ -9,7 +9,7 @@ from FirmParser.bdg_maker import *
 from FirmParser.unpacker import *
 
 
-def main_parser(firmware_path, results_file, vendor, vendor_keyword):
+def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
@@ -22,23 +22,12 @@ def main_parser(firmware_path, results_file, vendor, vendor_keyword):
     # Make dir to store results
     output_dir = os.path.join(os.getcwd(), firm_name)
     os.makedirs(output_dir, exist_ok=True)
-
-    # Extract filesystem from firmware file
-    try:
-        fs_path = extract_filesystem(firmware_path, vendor)
-        if fs_path is None:
-            os.rmdir(output_dir)
-            return
-    except Exception as e:
-        print(f"\033[91m[-]\033[0m Error to extract filesystem for {firmware_path}: {e}")
-        os.rmdir(output_dir)
-        return
     
     lv1_results = dict()
 
     # Level1 analyzing
-    bins = list(set(extract_bins(fs_path)))
-    lv1_analyzer = LevelOneAnalyzer(fs_path, bins, vendor_keyword)
+    bins = list(set(extract_bins(firmware_path)))
+    lv1_analyzer = LevelOneAnalyzer(firmware_path, bins, vendor_keyword)
     if lv1_analyzer.analyze():
         print(f"\033[91m[-]\033[0m Something wrong happened while analyzing {firmware_path}")
     else:
@@ -50,10 +39,22 @@ def main_parser(firmware_path, results_file, vendor, vendor_keyword):
         lv1_results_output = os.path.join(output_dir, "lv1_results.json")
         save_to_json(lv1_results, lv1_results_output)
         print("\033[92m[+]\033[0m Finish Level1 Analysis")
+        
+        # Generate Library Object
+        libs_full_path = lv1_analyzer.get_libs_full_path()
 
+        lib_parser = LibParser(libs=libs_full_path)
+        print("\033[92m[+]\033[0m Make library-symbols pair")
+        lib_infos = lib_parser.get_lib_symbols()
+
+        # Library information will be stored
+        libs_results_output = os.path.join(output_dir, "libs_results.json")
+        save_to_json(lib_infos, libs_results_output)
+        print("\033[92m[+]\033[0m LIB-SYM data was stored.")
+        
         # Level2 analyzing
         print("\033[92m[+]\033[0m Start Level2 Analysis")
-        lv2_analyzer = LevelTwoAnalyzer(fs_path=fs_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], libs=lv1_results['libraries'])
+        lv2_analyzer = LevelTwoAnalyzer(fs_path=firmware_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], lib_infos=lib_infos)
         
         # Start parsing each binary
         lv2_analyzer.generate_info()
@@ -81,57 +82,60 @@ def main_parser(firmware_path, results_file, vendor, vendor_keyword):
         with open(results_file, 'a') as f:
             f.write(f"{firm_name}/{exe_time}\n")
         
-        # 분석 완료한 펌웨어 삭제
-        del firmware_path
+        # # 분석 완료한 펌웨어 삭제
+        # del firmware_path
 
 def main():
     """
     This program was created to analyze the features of multiple firmware files in a given directory and store them in a database.
     """
     # Create Arg obj
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Analyze firmware files and store results in a database.")
     
-    # arg1 is the directory containing firmware files
-    parser.add_argument("directory", type=str, help="Directory containing firmware files")
-    parser.add_argument("vendor_keyword_file", type=str, help="Path of file was written about vendor's keyword")
-    parser.add_argument("vendor", type=str, help="Target Vendor name")
+    parser.add_argument("-t", "--type", type=str, help="path type(multi or single)")
+    parser.add_argument("-p", "--path", type=str, help="Target path")
+    parser.add_argument("-vkw", "--vendor_keyword_file", type=str, required=True, help="Path to the file containing vendor's keywords")
+    parser.add_argument("-v", "--vendor", type=str, required=True, help="Name of the target vendor")
     args = parser.parse_args()
 
     if not os.path.isdir(args.directory):
         print(f"\033[91m[-]\033[0m The path {args.directory} is not a valid directory.")
         return
-    
-    # decompress all file
-    print("\033[92m[+]\033[0m Preprocessing Target Directory...")
-    decompress_files(args.directory)
-    
-    # Get all firmware files in the directory
-    firmware_files = []
-    print(f"\033[92m[+]\033[0m Listing Firmware Files")
-    for root, dirs, files in os.walk(args.directory):
-        for file in files:
-            if is_encrypted_file(file):
-                print(f"\033[91m[-]\033[0m {os.path.basename(file)} was Encrypted")
-            else:
-                firmware_files.append(os.path.join(root, file))
 
-    if not firmware_files:
-        print("\033[91m[-]\033[0m No firmware files found in the directory.")
-        return
-    
-    # results time file
-    results_file = f"results_time_{args.vendor}.csv"
-    with open(results_file, 'w') as f:
-        f.write("firmware,execution_time\n")
+    if args.type == 'multi':
+        # Get all firmware files in the directory
+        firmware_files = []
+        # print(f"\033[92m[+]\033[0m Listing Firmware Files")
+        for root, dirs, files in os.walk(args.path):
+            for fs in files:
+                firmware_files.append(fs)
+        # results time file
+        results_file = f"results_time_{args.vendor}.csv"
+        with open(results_file, 'w') as f:
+            f.write("firmware,execution_time\n")
 
-    # set vendor_keyword
-    vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
+        # set vendor_keyword
+        vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
 
-    for firmware_file in firmware_files:
+        for firmware_fs in firmware_files:
+            print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_fs)}>")
+            main_parser(firmware_fs, results_file, args.vendor, vendor_keyword)
+            print_blue_line()
+            # initialize_dir(args.vendor)
+
+    elif args.type == 'single':
+        firmware_file = args.path
         print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_file)}>")
+
+        # results time file
+        results_file = f"results_time_{args.vendor}.csv"
+        with open(results_file, 'w') as f:
+            f.write("firmware,execution_time\n")
+
+        # set vendor_keyword
+        vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
         main_parser(firmware_file, results_file, args.vendor, vendor_keyword)
         print_blue_line()
-        initialize_dir(args.vendor)
 
 if __name__ == '__main__':
     main()
