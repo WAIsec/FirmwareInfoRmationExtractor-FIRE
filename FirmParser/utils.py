@@ -92,82 +92,58 @@ def find_libraries(fs_path):
                 libs_full.append(file_path)
     return list(set(libs_base)), list(set(libs_full))
 
-def extract_filesystem(target_path, vendor):
-    """
-    주어진 경로(target_path) 내의 모든 펌웨어 파일을 순회하여 Binwalk를 통해 파일 시스템을 추출합니다.
-    <param>
-    [target_path]: 펌웨어 파일들이 포함된 상위 디렉토리
-    [vendor]: 벤더 이름으로 디렉토리 정리
-    <return>
-    [extraction_dir]: 추출된 파일 시스템 디렉토리 경로
-    """
-    extraction_base = f"Extracted_{vendor}_FS/"
-    os.makedirs(extraction_base, exist_ok=True)
-
-    # target_path 내의 모든 파일과 하위 디렉토리를 순회
-    for root, dirs, files in os.walk(target_path):
-        
-        for file in files:
-            try:
-                # 펌웨어 파일이 맞다면 (확장자 체크 등 필요시 추가 가능)
-                firm_img = os.path.join(root, file)
-                extracted_dir = os.path.join(extraction_base, '_' + os.path.basename(firm_img) + ".extracted")
-                clean_dir = os.path.join(extraction_base, '_'+os.path.basename(firm_img))  # .extracted 제거한 깨끗한 폴더 이름
-                
-                if not os.path.isdir(clean_dir):
-                    # Binwalk 실행하여 파일 시스템 추출
-                    result = subprocess.run(['binwalk', '-e', '-C', extraction_base, firm_img], capture_output=True, text=True)
-                    if result.returncode != 0:
-                        raise RuntimeError(f"\033[91m[-]\033[0m Binwalk 추출 실패: {result.stderr}")
-                    
-                    # .extracted 폴더 이름을 깨끗한 폴더 이름으로 변경
-                    if os.path.exists(extracted_dir):
-                        os.rename(extracted_dir, clean_dir)
-
-                directories = os.listdir(clean_dir)
-                for dir_name in directories:
-                    dir_path = os.path.join(clean_dir, dir_name)
-                    if os.path.isdir(dir_path):
-                        # 디렉토리가 비어있는지 체크
-                        if not any(os.listdir(dir_path)):
-                            print(f"\033[91m[-]\033[0m {dir_path}에 콘텐츠가 없어 삭제합니다.")
-                            shutil.rmtree(dir_path)
-                            continue
-                        
-                        # 하위 디렉토리가 있는지 체크
-                        subdirs = [sub for sub in os.listdir(dir_path) if os.path.isdir(os.path.join(dir_path, sub))]
-                        if not subdirs:
-                            print(f"\033[91m[-]\033[0m {dir_path}에 하위 디렉토리가 없어 삭제합니다.")
-                            shutil.rmtree(dir_path)
-                            continue
-                            
-                        # 하위 디렉토리에 콘텐츠가 있는지 체크
-                        content_found = False
-                        for subdir in subdirs:
-                            if os.listdir(os.path.join(dir_path, subdir)):
-                                content_found = True
-                                break
-                        if not content_found:
-                            print(f"\033[91m[-]\033[0m {dir_path}의 하위 디렉토리에도 콘텐츠가 없어 삭제합니다.")
-                            shutil.rmtree(dir_path)
-                            continue
-                            
-                        print(f"\033[92m[+]\033[0m 유효한 파일 시스템 발견: {dir_path}")
-
-                # clean_dir 내부에 남은 파일이나 폴더가 없으면 clean_dir 삭제
-                if not os.listdir(clean_dir):
-                    print(f"\033[91m[-]\033[0m 파일 시스템 추출 실패: {clean_dir}를 삭제합니다.")
-                    shutil.rmtree(clean_dir)
-
-            except Exception as e:
-                print(f"\033[91m[-]\033[0m 오류 발생: {e}")
-                continue
-
+def extract_filesystem(dir_path, vendor):
+    # vendor 폴더 생성
+    vendor_dir = os.path.join(dir_path, vendor)
+    if not os.path.exists(vendor_dir):
+        os.makedirs(vendor_dir)
     
-    print(f"\033[92m[+]\033[0m 전체 파일 시스템 추출 완료")
-    return None
-
+    # 분석 제외 확장자 리스트
+    excluded_extensions = ['pdf', 'html']
+    
+    # 디렉터리 내 모든 파일 탐색
+    for filename in os.listdir(dir_path):
+        file_path = os.path.join(dir_path, filename)
         
+        # 파일인지 확인하고 제외 확장자가 아닌 경우에만 처리
+        if os.path.isfile(file_path) and not any(filename.lower().endswith(ext) for ext in excluded_extensions):
+            # 저장될 폴더 경로 설정
+            output_dir = os.path.join(vendor_dir)
+            
+            # binwalk 명령어 실행하여 파일시스템 추출
+            print(f"\033[92m[+]\033[0m Extracting filesystem from {filename}...")
+            try:
+                result = subprocess.run(['binwalk', '--extract', '--directory', output_dir, file_path],
+                                        capture_output=True, text=True, timeout=300)
+                
+                # 정상적으로 실행되었지만 ELF 파일이 없을 수 있음 -> ELF 파일 검사
+                if result.returncode == 0:
+                    if not contains_elf_files(output_dir):
+                        # ELF 파일이 없는 경우 폴더 삭제
+                        shutil.rmtree(output_dir)
+                        print(f"\033[91m[-]\033[0m No ELF files found in {filename}'s filesystem. Folder removed.")
+                    else:
+                        print(f"\033[92m[+]\033[0m Successfully extracted filesystem for {filename} into {output_dir}")
+                else:
+                    print(f"\033[91m[-]\033[0m Failed to extract filesystem for {filename}. Error: {result.stderr}")
+            
+            except subprocess.TimeoutExpired:
+                # 5분 넘게 소요된 경우 예외 처리
+                print(f"\033[91m[-]\033[0m Timeout: Skipping {filename} after 5 minutes.")
+
+def contains_elf_files(directory):
+    """해당 디렉터리에 ELF 파일이 있는지 검사"""
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                # file 명령어로 ELF 파일인지 확인
+                result = subprocess.run(['file', file_path], capture_output=True, text=True)
+                if 'ELF' in result.stdout:
+                    return True
+            except Exception as e:
+                print(f"Error checking {file_path}: {e}")
+    return False
 
 def extract_bins(fs_path):
     bins = []

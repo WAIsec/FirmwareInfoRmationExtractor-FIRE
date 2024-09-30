@@ -26,6 +26,7 @@ def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]
     lv1_results = dict()
 
     # Level1 analyzing
+    print("\033[92m[+]\033[0m Start Level1 Analysis")
     bins = list(set(extract_bins(firmware_path)))
     lv1_analyzer = LevelOneAnalyzer(firmware_path, bins, vendor_keyword)
     if lv1_analyzer.analyze():
@@ -35,7 +36,6 @@ def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]
         lv1_results = lv1_analyzer.get_lv1_results()
 
         # Store lv1_results
-        print("\033[92m[+]\033[0m Start Level1 Analysis")
         lv1_results_output = os.path.join(output_dir, "lv1_results.json")
         save_to_json(lv1_results, lv1_results_output)
         print("\033[92m[+]\033[0m Finish Level1 Analysis")
@@ -98,21 +98,25 @@ def main():
     parser.add_argument("-v", "--vendor", type=str, required=True, help="Name of the target vendor")
     args = parser.parse_args()
 
-    if not os.path.isdir(args.directory):
-        print(f"\033[91m[-]\033[0m The path {args.directory} is not a valid directory.")
+    if not os.path.isdir(args.path):
+        print(f"\033[91m[-]\033[0m The path {args.path} is not a valid directory.")
         return
 
     if args.type == 'multi':
         # Get all firmware files in the directory
         firmware_files = []
-        # print(f"\033[92m[+]\033[0m Listing Firmware Files")
-        for root, dirs, files in os.walk(args.path):
-            for fs in files:
-                firmware_files.append(fs)
+        print(f"\033[92m[+]\033[0m Listing Firmware Files")
+        # args.path의 바로 아래에 있는 폴더들만 가져옴
+        for item in os.listdir(args.path):
+            item_path = os.path.join(args.path, item)
+            if os.path.isdir(item_path):  # 디렉토리인지 확인
+                print(f"\033[92m[+]\033[0m {item} append to Waiting Queue")
+                firmware_files.append(item_path)
         # results time file
         results_file = f"results_time_{args.vendor}.csv"
         with open(results_file, 'w') as f:
             f.write("firmware,execution_time\n")
+        print_blue_line()
 
         # set vendor_keyword
         vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
