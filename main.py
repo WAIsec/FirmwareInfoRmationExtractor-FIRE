@@ -6,7 +6,6 @@ from FirmParser.utils import *
 from FirmParser.level1_tools import *
 from FirmParser.level2_tools import *
 from FirmParser.bdg_maker import *
-from FirmParser.unpacker import *
 
 
 def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]):
