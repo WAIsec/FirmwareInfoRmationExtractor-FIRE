@@ -8,7 +8,7 @@ from FirmParser.level2_tools import *
 from FirmParser.bdg_maker import *
 
 
-def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]):
+def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[], detail_opt=None):
     """
     This program was created to analyze the features of a single firmware and store them in a database.
     """
@@ -53,7 +53,7 @@ def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]
         
         # Level2 analyzing
         print("\033[92m[+]\033[0m Start Level2 Analysis")
-        lv2_analyzer = LevelTwoAnalyzer(fs_path=firmware_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], lib_infos=lib_infos)
+        lv2_analyzer = LevelTwoAnalyzer(fs_path=firmware_path, bins=bins, v_bin=lv1_results['vendor_bin'], p_bin=lv1_results['public_bin'], lib_infos=lib_infos, detail_opt=detail_opt)
         
         # Start parsing each binary
         lv2_analyzer.generate_info()
@@ -91,10 +91,12 @@ def main():
     # Create Arg obj
     parser = argparse.ArgumentParser(description="Analyze firmware files and store results in a database.")
     
-    parser.add_argument("-t", "--type", type=str, help="path type(multi or single)")
-    parser.add_argument("-p", "--path", type=str, help="Target path")
-    parser.add_argument("-vkw", "--vendor_keyword_file", type=str, required=True, help="Path to the file containing vendor's keywords")
-    parser.add_argument("-v", "--vendor", type=str, required=True, help="Name of the target vendor")
+    parser.add_argument("-t", "--type", type=str, default='multi', help="path type(multi or single)")
+    parser.add_argument("-p", "--path", type=str, required=True, help="Target path")
+    parser.add_argument("-k", "--keyword", type=str, required=True, help="Path to the file containing vendor's keywords")
+    parser.add_argument("-o", "--output", type=str, default='Unknown', help="Name of the target vendor")
+    parser.add_argument("-d", "--detail", action='store_true', help="Generating BDG information")
+
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
@@ -112,32 +114,32 @@ def main():
                 print(f"\033[92m[+]\033[0m {item} append to Waiting Queue")
                 firmware_files.append(item_path)
         # results time file
-        results_file = f"results_time_{args.vendor}.csv"
+        results_file = f"results_time_{args.output}.csv"
         with open(results_file, 'w') as f:
             f.write("firmware,execution_time\n")
         print_blue_line()
 
         # set vendor_keyword
-        vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
+        vendor_keyword = load_vendor_strings_from_file(args.keyword)
 
         for firmware_fs in firmware_files:
             print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_fs)}>")
-            main_parser(firmware_fs, results_file, args.vendor, vendor_keyword)
+            main_parser(firmware_fs, results_file, args.output, vendor_keyword, args.detail)
             print_blue_line()
-            # initialize_dir(args.vendor)
+            # initialize_dir(args.output)
 
     elif args.type == 'single':
         firmware_file = args.path
         print(f"\033[92m[+]\033[0m Parse Firmware <{os.path.basename(firmware_file)}>")
 
         # results time file
-        results_file = f"results_time_{args.vendor}.csv"
+        results_file = f"results_time_{args.output}.csv"
         with open(results_file, 'w') as f:
             f.write("firmware,execution_time\n")
 
         # set vendor_keyword
-        vendor_keyword = load_vendor_strings_from_file(args.vendor_keyword_file)
-        main_parser(firmware_file, results_file, args.vendor, vendor_keyword)
+        vendor_keyword = load_vendor_strings_from_file(args.keyword)
+        main_parser(firmware_file, results_file, args.output, vendor_keyword, args.detail)
         print_blue_line()
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ import lief
 EXCEPTION_CASE = ['ISS.exe', 'busybox']
 
 class LevelTwoAnalyzer:
-    def __init__(self, fs_path, bins, p_bin, v_bin, lib_infos):
+    def __init__(self, fs_path, bins, p_bin, v_bin, lib_infos, detail_opt):
         """
         This class will be use to parse each binary
         p_bin: public binary
@@ -22,6 +22,7 @@ class LevelTwoAnalyzer:
         self.bin_list = bins
         self.bin_infos = dict()
         self.lib_infos = lib_infos
+        self.detail_opt = detail_opt
     
     def generate_info(self):
         
@@ -30,14 +31,11 @@ class LevelTwoAnalyzer:
                 if is_elf_file(bin):
                     target = binNode(bin, self.lib_infos)
                     try:
-                        if any(exception in bin for exception in EXCEPTION_CASE):
-                        # if any(exception in bin for exception in EXCEPTION_CASE):
+                        if any(exception in bin for exception in EXCEPTION_CASE) or not self.detail_opt:
                             print(f"\033[92m[+]\033[0m Just apply basic parse to {os.path.basename(bin)}.")
                             target.analyze_exception()
                             self.bin_infos[target.bin_name] = target.get_bin_info()
-                        # elif os.path.basename(bin) in self.v_bin:
-                        elif os.path.basename(bin) in self.v_bin or os.path.basename(bin) in self.p_bin:
-                            # print(f"\033[92m[+]\033[0m {os.path.basename(bin)} is vendor binary, which will be parsed more detail by using mango.")
+                        elif os.path.basename(bin) in self.v_bin or os.path.basename(bin) in self.p_bin or self.detail_opt:
                             print(f"\033[92m[+]\033[0m {os.path.basename(bin)} will be parsed more detail by using mango.")
                             target.analyze()
                             self.bin_infos[target.bin_name] = target.get_bin_info()
