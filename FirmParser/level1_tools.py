@@ -1,6 +1,5 @@
 import os
 import subprocess
-import magic
 from FirmParser.utils import find_libraries
 WEB_EXTENSION = ['.html', '.htm', '.xhtml', '.xml', '.css', '.scss', '.sass', '.less', '.js', '.ts', '.jsx', '.tsx', '.php', '.asp', '.aspx', '.jsp']
 

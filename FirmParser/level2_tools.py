@@ -55,10 +55,11 @@ class LevelTwoAnalyzer:
 
 # be used to node in level2Analyzer
 class binNode:
-    def __init__(self, bin, libs_info=[]):
+    def __init__(self, bin, libs_info=dict()):
         self.bin_path = bin
         self.bin_name = os.path.basename(bin)
         self.bin_arch = None
+        self.version_info = None
         self.is_static = None
         self.is_stripped = None
         self.used_libs = []
@@ -67,7 +68,7 @@ class binNode:
         self.keywords = []
         self.nvram_env_used = None
         self.hash_value = None
-        self.bin_symbols = []
+        self.extra_symbols = []
         self.checksec = {
             # 0: No applied, 1: applied, 2: high level applied
             'RELRO': None,
@@ -95,10 +96,12 @@ class binNode:
         info_dict = {
             # 'bin_name': self.bin_name,
             'bin_arch': self.bin_arch,
+            'version_info': self.version_info,
             'is_static': self.is_static,
             'is_stripped': self.is_stripped,
             'used_libs': self.used_libs,
             'lib_sym_pair': self.lib_sym_pair,
+            'extra_symbols': self.extra_symbols,
             'keywords': self.keywords,
             'used_nvram_env': self.nvram_env_used,
             'facilities': self.features,
@@ -153,6 +156,8 @@ class binNode:
         <param>
         [bin]: target binary
         """
+        notes = parse_notes(self.bin_path)
+        self.version_info = get_version_info(notes)
         result = subprocess.run(['file', self.bin_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output = result.stdout.decode('utf-8')
 
@@ -205,8 +210,8 @@ class binNode:
                             bin_sym = result.stdout.strip().split('\n')
                             if not bin_sym:
                                 self.used_libs = []
-                            for lib, lib_sym in self.libs_info.items():
-                                if any(symbol in bin_sym for symbol in lib_sym):
+                            for lib in self.libs_info:
+                                if any(symbol in bin_sym for symbol in lib["symbols"]):
                                     self.used_libs.append(lib)
 
                         except subprocess.CalledProcessError as e:
@@ -359,34 +364,39 @@ class binNode:
     def make_lib_sym_pair(self):
         try:
             # binary symbol
-            self.bin_symbols = self.find_binary_symbols()
-            # matched_syms = []
-            # for lib, syms in self.libs_info.items():
-            #     for bin_sym in self.bin_symbols:
-            #         if bin_sym in syms:
-            #             matched_syms.append(bin_sym)
-            #     # Test Log
-            #     # print(f"Bin_Syms-> lib:{lib}, syms:{matched_syms}")
-            #     if len(matched_syms) > 0:
-            #         self.lib_sym_pair[lib] = matched_syms
-            #         # initialized
-            #         matched_syms = []
-            # return    
-            for bin_sym in self.bin_symbols:
+            symbols = extract_symbols_from_binary(self.bin_path)
+            for bin_sym in symbols:
                 find_flag = False
                 for lib in self.used_libs:
-                    if not lib in self.lib_sym_pair:
-                        self.lib_sym_pair[lib] = []
-                    for sym in self.libs_info[lib]:
-                        if bin_sym == sym:
-                            find_flag = True
-                            self.lib_sym_pair[lib].append(bin_sym)
-                            break
                     if find_flag:
                         break
+                    # Ensure lib exists in the pair with default version and empty symbols list
+                    lib_name = os.path.basename(lib)
+                    if lib_name not in self.lib_sym_pair:
+                        self.lib_sym_pair[lib_name] = {
+                            "version": "latest",
+                            "symbols": []
+                        }
+                    # Check if lib information is available and process it
+                    if lib_name in self.libs_info:
+                        lib_info = self.libs_info[lib_name]
+                        self.lib_sym_pair[lib_name]["version"] = lib_info.get("version", "latest")
+                        
+                        # Iterate over the symbols provided in lib_info
+                        for sym in lib_info.get("symbols", []):
+                            if bin_sym == sym:
+                                find_flag = True
+                                self.lib_sym_pair[lib_name]["symbols"].append(bin_sym)
+                                break
+                if not find_flag:
+                    self.extra_symbols.append(bin_sym)
+            
+            # Remove entries with empty symbol lists or default values after processing
             self.lib_sym_pair = remove_empty_values(self.lib_sym_pair)
+            self.extra_symbols = list(set(self.extra_symbols))
+
         except Exception as e:
-            print(f"\033[91m[-]\033[0m Error: [lv2] check_used_library->{e}")
+            print(f"\033[91m[-]\033[0m Error: [lv2] make_lib_sym_pair->{e}")
             return
                   
     def calculate_file_hash(self, hash_algo='sha256'):
@@ -438,42 +448,42 @@ class binNode:
         for key, str in self.interesting_str.items():
             self.interesting_str[key] = list(set(self.interesting_str[key]))
 
-    def find_binary_symbols(self):
-        try:
-            readelf_s_output = subprocess.check_output(['readelf', '-s', '--wide',  self.bin_path], stderr=subprocess.DEVNULL)
-            readelf_s_output = readelf_s_output.decode('utf-8')
-            lines = readelf_s_output.split('\n')
+    # def find_binary_symbols(self):
+    #     try:
+    #         readelf_s_output = subprocess.check_output(['readelf', '-s', '--wide',  self.bin_path], stderr=subprocess.DEVNULL)
+    #         readelf_s_output = readelf_s_output.decode('utf-8')
+    #         lines = readelf_s_output.split('\n')
             
-            header_found = False
-            symbols = []
+    #         header_found = False
+    #         symbols = []
 
-            for line in lines:
-                if 'Num:' in line:
-                    header_found = True
-                    continue
+    #         for line in lines:
+    #             if 'Num:' in line:
+    #                 header_found = True
+    #                 continue
                 
-                if not header_found:
-                    continue
+    #             if not header_found:
+    #                 continue
                 
-                columns = line.split()
-                if len(columns) < 8:
-                    continue
+    #             columns = line.split()
+    #             if len(columns) < 8:
+    #                 continue
 
-                try:
-                    sym_type = columns[3]
-                    name = columns[-1]
-                    function_name = name.split('@')[0]
-                    if sym_type == 'FUNC':
-                        # 공통 심볼 제외
-                        if function_name in COMMON_SYM:
-                            continue
-                        symbols.append(function_name)
-                except ValueError:
-                    print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
-                    continue
-            # 심볼 중복 제거 후 반환
-            return list(set(symbols))
+    #             try:
+    #                 sym_type = columns[3]
+    #                 name = columns[-1]
+    #                 function_name = name.split('@')[0]
+    #                 if sym_type == 'FUNC':
+    #                     # 공통 심볼 제외
+    #                     if function_name in COMMON_SYM:
+    #                         continue
+    #                     symbols.append(function_name)
+    #             except ValueError:
+    #                 print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
+    #                 continue
+    #         # 심볼 중복 제거 후 반환
+    #         return list(set(symbols))
             
-        except subprocess.CalledProcessError as e:
-            print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
-            return []
+        # except subprocess.CalledProcessError as e:
+        #     print(f"\033[91m[-]\033[0m Error extracting symbols from {self.bin_name}: find_binary_symbols->{e}")
+        #     return []

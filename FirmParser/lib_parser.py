@@ -1,15 +1,25 @@
 import subprocess, re, os
+from FirmParser.utils import *
 
 class LibParser:
     def __init__(self, libs):
-        self.lib_sym_pair = dict()          # lib-symbol pair List
-        self.libs = libs                      # extract library file from filesystem
+        self.lib_sym_pair = dict()              # lib-symbol pair List
+        self.libs = libs                        # extract library file from filesystem
 
     # return results
     def get_lib_symbols(self):
         for lib in self.libs:
+            lib_name = os.path.basename(lib)
+            
+            # Initialize the dictionary for the library if it doesn't exist
+            if lib_name not in self.lib_sym_pair:
+                self.lib_sym_pair[lib_name] = {}  # Initialize with an empty dictionary
+
             symbols = self.extract_symbols(lib)
-            self.lib_sym_pair[os.path.basename(lib)] = symbols
+            # 여기에 version 정보 추출 결과 삽입
+            notes_data = parse_notes(lib)
+            self.lib_sym_pair[os.path.basename(lib)]["version_info"] = get_version_info(notes_data)
+            self.lib_sym_pair[os.path.basename(lib)]["def_functions"] = symbols
         return self.lib_sym_pair
 
     # check stripped lib

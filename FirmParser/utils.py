@@ -11,6 +11,7 @@ import shutil
 import glob
 import re
 import shutil
+import lief, contextlib
 
 
 BASE_DIR = './Parsing_Results'
@@ -263,17 +264,12 @@ def initialize_dir(vendor):
     # for
     shutil.rmtree(f'Extracted_Firmware_{vendor}')
 
-def remove_empty_values(dictionary):
-    """
-    사전에서 value 값이 비어 있는 key 값을 삭제합니다.
-
-    Parameters:
-    dictionary (dict): value 값이 비어 있는 key 값을 삭제할 사전
-
-    Returns:
-    dict: value 값이 비어 있는 key 값이 삭제된 새로운 사전
-    """
-    return {k: v for k, v in dictionary.items() if v}
+def remove_empty_values(lib_sym_pair):
+    # Create a new dictionary excluding entries with empty "symbols" lists.
+    return {
+        lib: info for lib, info in lib_sym_pair.items()
+        if info.get("symbols")
+    }
 
 def extract_strings(binary_path):
     result = subprocess.run(["strings", binary_path], capture_output=True, text=True)
@@ -312,3 +308,163 @@ def flatten_directory_structure(parent_dir):
     
     except Exception as e:
         print(f"Error occurred: {e}")
+
+def extract_symbols_from_binary(binary_path):
+    try:
+        # LIEF를 사용하여 바이너리 파일을 파싱
+        binary = lief.parse(binary_path)
+        
+        # 심볼 추출 (LIEF가 지원하는 심볼 정보 추출)
+        symbols = binary.symbols
+        
+        # 중복 없이 심볼 이름 추출
+        symbol_names = set(sym.name for sym in symbols if sym.name)
+        
+        # 함수 이름을 필터링하는 규칙 적용
+        def filter_function_symbols(symbols):
+            function_symbols = []
+            for symbol in symbols:
+                # @@가 있을 경우, 그 앞의 문자열만 추출
+                if '@@' in symbol:
+                    symbol = symbol.split('@@')[0]
+                
+                # .이 포함된 심볼은 배제
+                if '.' in symbol:
+                    continue
+                
+                # 알파벳, 숫자, 언더바로만 이루어진 심볼만 함수로 간주
+                if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', symbol) and symbol not in COMMON_SYM:
+                    function_symbols.append(symbol)
+            return function_symbols
+        
+        # 필터링 적용
+        filtered_symbols = filter_function_symbols(symbol_names)
+        
+        # 리스트로 변환하여 반환
+        return list(filtered_symbols)
+    
+    except Exception as e:
+        print(f"\033[91m[-]\033[0m Error: Failed to extract symbols from binary -> {e}")
+        return []
+
+    
+def integer_to_hex_str(e):
+    """
+    Converts an integer to a hexadecimal string representation.
+
+    Args:
+        e: The integer to be converted.
+
+    Returns:
+        The hexadecimal string representation of the integer.
+    """
+    return "{:02x}".format(e)
+
+def parse_notes(exe_file):
+    """
+    Parse the executable using lief and capture the metadata
+
+    :param: exe_file Binary file
+    :return Metadata dict
+    """
+    try:
+        parsed_obj = lief.parse(exe_file)
+        # so file
+        data = []
+        
+        if parsed_obj:
+            notes = parsed_obj.notes
+            if isinstance(notes, lief.lief_errors):
+                return data
+            data += [extract_note_data(idx, note) for idx, note in enumerate(notes)]
+        
+        return data
+    
+    except lief.bad_format as e:
+        print(f"\033[91m[-]\033[0m Unsupported file format: {e}")
+    except Exception as e:
+        print(f"\033[91m[-]\033[0m An error occurred: {e}")
+
+def extract_note_data(idx, note):
+    """
+    Extracts metadata from a note object and returns a dictionary.
+
+    Args:
+        idx (int): The index of the note.
+        note: The note object to extract data from.
+    Returns:
+        dict: A dictionary containing the extracted metadata
+    """
+    note_str = ""
+    build_id = ""
+    if note.type == lief.ELF.Note.TYPE.GNU_BUILD_ID:
+        note_str = str(note)
+    if "ID Hash" in note_str:
+        build_id = note_str.rsplit("ID Hash:", maxsplit=1)[-1].strip()
+    description = note.description
+    description_str = " ".join(map(integer_to_hex_str, description[:64]))
+    if len(description) > 64:
+        description_str += " ..."
+    if note.type == lief.ELF.Note.TYPE.GNU_BUILD_ID:
+        build_id = description_str.replace(" ", "")
+    type_str = note.type
+    type_str = str(type_str).rsplit(".", maxsplit=1)[-1]
+    note_details = ""
+    sdk_version = ""
+    ndk_version = ""
+    ndk_build_number = ""
+    abi = ""
+    version_str = ""
+    if type_str == "ANDROID_IDENT":
+        sdk_version = note.sdk_version
+        ndk_version = note.ndk_version
+        ndk_build_number = note.ndk_build_number
+    elif type_str.startswith("GNU_ABI_TAG"):
+        version = [str(i) for i in note.version]
+        version_str = ".".join(version)
+    else:
+        with contextlib.suppress(AttributeError):
+            note_details = note.details
+            version = note_details.version
+            abi = str(note_details.abi)
+            version_str = f"{version[0]}.{version[1]}.{version[2]}"
+    if not version_str and build_id:
+        version_str = build_id
+    return {
+        "index": idx,
+        "description": description_str,
+        "type": type_str,
+        "details": note_details,
+        "sdk_version": sdk_version,
+        "ndk_version": ndk_version,
+        "ndk_build_number": ndk_build_number,
+        "abi": abi,
+        "version": version_str,
+        "build_id": build_id,
+    }
+        
+def get_version_info(notes):
+    """Returns the version of the shared object (SO) file.
+
+    Args:
+        notes: The metadata notes of the SO file.
+
+    Returns:
+        str: The version of the SO file.
+    """
+    version = ['N/F', 'N/F']
+    
+    if notes:
+        for anote in notes:
+            if anote.get("type"):
+                version[0] = anote.get("type")
+            if anote.get("version"):
+                version[1] = anote.get("version")
+                break
+            if anote.get("build_id"):
+                version[1] = anote.get("build_id")
+                break
+    
+    ret = f"{version[0]}@{version[1]}"
+    
+    return ret
