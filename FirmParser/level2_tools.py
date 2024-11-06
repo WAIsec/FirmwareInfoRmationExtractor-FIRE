@@ -104,6 +104,7 @@ class binNode:
             'extra_symbols': self.extra_symbols,
             'keywords': self.keywords,
             'used_nvram_env': self.nvram_env_used,
+            'bdg': self.bdg,
             'facilities': self.features,
             'strings': self.interesting_str,
             'checksec': self.checksec,

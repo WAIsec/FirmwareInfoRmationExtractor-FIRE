@@ -19,6 +19,10 @@ class BDGinfo:
                         continue
 
                     for keyword in info['keywords']:
+                        # 'TOP' 키워드는 무시하고 다음 키워드로 이동
+                        if keyword == "TOP":
+                            continue
+                        
                         if keyword in tar_bin_info['keywords']:
                             connections.append(tar_bin_path)
                             break

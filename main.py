@@ -59,10 +59,13 @@ def main_parser(firmware_path, results_file, vendor='Unknown', vendor_keyword=[]
         lv2_analyzer.generate_info()
         bin_info = lv2_analyzer.get_bin_infos()
 
-        # Generate BDG data and update initial bin_infos
-        generator = BDGinfo(bin_info)
-        bin_info = generator.update_bdg()
-
+        if detail_opt:
+            # Generate BDG data and update initial bin_infos
+            generator = BDGinfo(bin_info)
+            bin_info = generator.update_bdg()
+        else: 
+            pass
+        
         # Store lv2_results
         lv2_results_output = os.path.join(output_dir, "lv2_results.json")
         print("\033[92m[+]\033[0m Finish Level2 Analysis")
